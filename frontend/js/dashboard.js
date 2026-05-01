@@ -1,0 +1,811 @@
+/**
+ * frontend/js/dashboard.js — Dashboard main logic.
+ */
+
+import { Auth, ChatAPI, UserAPI } from './api.js';
+import { appendMessage, showTypingIndicator, autoResize } from './chat.js';
+import { initUpload } from './upload.js';
+import { initSidebar, toggleMobileSidebar } from './sidebar.js';
+import { exportChatPDF } from './export.js';
+
+// ─── Auth Guard ──────────────────────────────────────────────────────────
+if (!Auth.isLoggedIn()) window.location.href = 'index.html';
+
+// ─── State ───────────────────────────────────────────────────────────────
+let activeChatId = null;
+let isTyping     = false;
+let modalPendingClose = null; // Track which modal is waiting for confirmation
+
+// ─── DOM Refs ─────────────────────────────────────────────────────────────
+const chatInner      = document.getElementById('chatInner');
+const msgInput       = document.getElementById('msgInput');
+const sendBtn        = document.getElementById('sendBtn');
+const welcomeScreen  = document.getElementById('welcomeScreen');
+const chatTitle      = document.getElementById('chatTitle');
+const exportBtn      = document.getElementById('exportBtn');
+const activeDocBadge = document.getElementById('activeDocBadge');
+const activeDocName  = document.getElementById('activeDocName');
+const dropZone       = document.getElementById('dropZone');
+const fileInput      = document.getElementById('fileInput');
+const filesPanel     = document.getElementById('filesPanel');
+
+// ─── Toast helper ─────────────────────────────────────────────────────────
+function showToast(msg, type = 'info') {
+  const tc = document.getElementById('toastContainer');
+  if (!tc) return;
+  const t  = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  tc.appendChild(t);
+  setTimeout(() => {
+    t.style.transition = 'opacity 0.3s';
+    t.style.opacity = '0';
+    setTimeout(() => t.remove(), 300);
+  }, 3500);
+}
+
+// ─── User Profile Logic ──────────────────────────────────────────────────
+const userBlock      = document.getElementById('userBlock');
+const userMenuPopup  = document.getElementById('userMenuPopup');
+const userNameText   = document.getElementById('userNameText');
+const userAvatarSmall= document.getElementById('userAvatarSmall');
+const menuChatsToggle= document.getElementById('menuChatsToggle');
+const chatsSubmenu   = document.getElementById('chatsSubmenu');
+
+async function loadUserProfile() {
+  try {
+    const profile = await UserAPI.getProfile();
+    if (userNameText) userNameText.textContent = profile.name;
+  } catch (err) {
+    if (userNameText) userNameText.textContent = 'User';
+  }
+}
+
+if (userBlock) {
+  loadUserProfile();
+  userBlock.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isShowing = userMenuPopup.classList.toggle('show');
+    userBlock.classList.toggle('active', isShowing);
+    
+    // Always collapse chats submenu when main menu is toggled
+    if (chatsSubmenu) {
+      chatsSubmenu.style.display = 'none';
+      const arrow = menuChatsToggle.querySelector('.submenu-arrow');
+      if (arrow) arrow.classList.remove('rotated');
+    }
+  });
+
+  document.addEventListener('click', () => {
+    userMenuPopup.classList.remove('show');
+    userBlock.classList.remove('active');
+    if (chatsSubmenu) chatsSubmenu.style.display = 'none';
+  });
+}
+
+const logoutBtn = document.getElementById('logoutBtn');
+const logoutOverlay = document.getElementById('logoutOverlay');
+const logoutCancel = document.getElementById('logoutCancel');
+const logoutConfirm = document.getElementById('logoutConfirm');
+
+if (logoutBtn && logoutOverlay) {
+  logoutBtn.addEventListener('click', () => {
+    logoutOverlay.classList.add('open');
+  });
+  
+  if (logoutCancel) {
+    logoutCancel.addEventListener('click', () => {
+      logoutOverlay.classList.remove('open');
+    });
+  }
+  
+  if (logoutConfirm) {
+    logoutConfirm.addEventListener('click', () => {
+      Auth.logout();
+    });
+  }
+  
+  logoutOverlay.addEventListener('click', (e) => {
+    if (e.target === logoutOverlay) logoutOverlay.classList.remove('open');
+  });
+}
+
+const archivedChatsBtn = document.getElementById('archivedChatsBtn');
+const hiddenChatsBtn   = document.getElementById('hiddenChatsBtn');
+if (archivedChatsBtn) archivedChatsBtn.addEventListener('click', () => sidebar.showFiltered('archived'));
+if (hiddenChatsBtn)   hiddenChatsBtn.addEventListener('click',   () => sidebar.showFiltered('hidden'));
+
+// ─── Profile Modal Logic ──────────────────────────────────────────────────
+const menuProfileBtn      = document.getElementById('menuProfileBtn');
+const profileOverlay      = document.getElementById('profileModalOverlay');
+const closeProfileBtn     = document.getElementById('closeProfileModal');
+const saveProfileBtn      = document.getElementById('saveProfileBtn');
+const togglePasswordBtn   = document.getElementById('togglePasswordBtn');
+const passwordInputs      = document.getElementById('passwordInputs');
+
+const profileNameInput    = document.getElementById('profileNameInput');
+const profileGenderSelect  = document.getElementById('profileGenderSelect');
+const profileProfessionSelect = document.getElementById('profileProfessionSelect');
+const profileEmailInput   = document.getElementById('profileEmailInput');
+
+// Advanced Options
+const advancedOptionsBtn = document.getElementById('advancedOptionsBtn');
+const advancedMenu       = document.getElementById('advancedMenu');
+const openChangePasswordBtn = document.getElementById('openChangePasswordBtn');
+const openDeleteUserBtn     = document.getElementById('openDeleteUserBtn');
+
+// Password Modal
+const passwordModalOverlay = document.getElementById('passwordModalOverlay');
+const currentPasswordInput = document.getElementById('currentPasswordInput');
+const newPasswordInput     = document.getElementById('newPasswordInput');
+const passwordCancel       = document.getElementById('passwordCancel');
+const passwordConfirm      = document.getElementById('passwordConfirm');
+
+// Delete User Modal
+const deleteUserOverlay = document.getElementById('deleteUserOverlay');
+const deleteUserCancel  = document.getElementById('deleteUserCancel');
+const deleteUserConfirm = document.getElementById('deleteUserConfirm');
+
+// Unsaved changes state
+const unsavedOverlay = document.getElementById('unsavedChangesOverlay');
+const discardChangesBtn = document.getElementById('discardChangesBtn');
+const saveAndCloseBtn = document.getElementById('saveAndCloseBtn');
+
+let initialProfileState = { name: '', gender: '', profession: '' };
+
+function getProfileCurrentState() {
+  return {
+    name: profileNameInput.value.trim(),
+    gender: profileGenderSelect.value,
+    profession: profileProfessionSelect.value
+  };
+}
+
+function hasProfileChanges() {
+  const current = getProfileCurrentState();
+  // Simplified since password is now in its own modal
+  return current.name !== initialProfileState.name || 
+         current.gender !== initialProfileState.gender || 
+         current.profession !== initialProfileState.profession;
+}
+
+// Custom Select Implementation
+function setupCustomSelect(containerId, triggerId, valueSpanId, optionsId, inputId) {
+  const container = document.getElementById(containerId);
+  const trigger = document.getElementById(triggerId);
+  const valueSpan = document.getElementById(valueSpanId);
+  const options = document.getElementById(optionsId);
+  const hiddenInput = document.getElementById(inputId);
+
+  if (!trigger || !options) return;
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    // Close other selects
+    document.querySelectorAll('.custom-select-options').forEach(opt => {
+      if (opt !== options) opt.classList.remove('show');
+    });
+    options.classList.toggle('show');
+  });
+
+  options.querySelectorAll('.custom-option').forEach(option => {
+    option.addEventListener('click', () => {
+      const val = option.getAttribute('data-value');
+      const text = option.textContent;
+      valueSpan.textContent = text;
+      hiddenInput.value = val;
+      options.classList.remove('show');
+    });
+  });
+
+  // Helper to set value programmatically
+  return {
+    setValue: (val) => {
+      hiddenInput.value = val;
+      const option = options.querySelector(`[data-value="${val}"]`);
+      valueSpan.textContent = option ? option.textContent : `Select ${inputId.includes('Gender') ? 'Gender' : 'Profession'}`;
+    }
+  };
+}
+
+const genderSelect = setupCustomSelect('genderSelectContainer', 'genderSelectTrigger', 'genderSelectValue', 'genderOptions', 'profileGenderSelect');
+const professionSelect = setupCustomSelect('professionSelectContainer', 'professionSelectTrigger', 'professionSelectValue', 'professionOptions', 'profileProfessionSelect');
+const themeSelectCustom = setupCustomSelect('themeSelectContainer', 'themeSelectTrigger', 'themeSelectValue', 'themeOptions', 'themeSelectDropdown');
+const summarySelectCustom = setupCustomSelect('summarySelectContainer', 'summarySelectTrigger', 'summarySelectValue', 'summaryOptions', 'defaultSummarySelect');
+
+// Close selects on outside click
+document.addEventListener('click', () => {
+  document.querySelectorAll('.custom-select-options').forEach(opt => opt.classList.remove('show'));
+});
+
+if (menuProfileBtn) {
+  menuProfileBtn.addEventListener('click', async () => {
+    try {
+      const profile = await UserAPI.getProfile();
+      initialProfileState = { 
+        name: profile.name || '', 
+        gender: profile.gender || '', 
+        profession: profile.profession || '' 
+      };
+      
+      if (profileNameInput)   profileNameInput.value   = initialProfileState.name;
+      if (genderSelect)        genderSelect.setValue(initialProfileState.gender);
+      if (professionSelect)    professionSelect.setValue(initialProfileState.profession);
+      if (profileEmailInput)  profileEmailInput.value  = profile.email || '';
+      
+      // Reset advanced section
+      if (advancedMenu) advancedMenu.style.display = 'none';
+      
+      profileOverlay.classList.add('open');
+    } catch (err) {
+      showToast('Failed to load profile', 'error');
+    }
+  });
+}
+
+// Advanced Options Toggle
+if (advancedOptionsBtn && advancedMenu) {
+  advancedOptionsBtn.addEventListener('click', () => {
+    const isHidden = advancedMenu.style.display === 'none';
+    advancedMenu.style.display = isHidden ? 'flex' : 'none';
+    advancedOptionsBtn.querySelector('svg').style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0)';
+  });
+}
+
+// Password Flow
+if (openChangePasswordBtn) {
+  openChangePasswordBtn.addEventListener('click', () => {
+    passwordModalOverlay.classList.add('open');
+    if (currentPasswordInput) currentPasswordInput.value = '';
+    if (newPasswordInput)     newPasswordInput.value = '';
+  });
+}
+
+if (passwordCancel) passwordCancel.addEventListener('click', () => passwordModalOverlay.classList.remove('open'));
+if (passwordConfirm) {
+  passwordConfirm.addEventListener('click', async () => {
+    const current_password = currentPasswordInput.value;
+    const new_password     = newPasswordInput.value;
+    if (!current_password || !new_password) {
+      return showToast('Both fields are required', 'warning');
+    }
+    try {
+      await UserAPI.patchProfile({ current_password, new_password });
+      showToast('Password updated', 'success');
+      passwordModalOverlay.classList.remove('open');
+    } catch (err) {
+      showToast(err.message || 'Failed to update password', 'error');
+    }
+  });
+}
+
+// Delete User Flow
+if (openDeleteUserBtn) {
+  openDeleteUserBtn.addEventListener('click', () => deleteUserOverlay.classList.add('open'));
+}
+if (deleteUserCancel) deleteUserCancel.addEventListener('click', () => deleteUserOverlay.classList.remove('open'));
+if (deleteUserConfirm) {
+  deleteUserConfirm.addEventListener('click', async () => {
+    try {
+      await UserAPI.deleteUser(); // We need to add this to api.js
+      showToast('Account deleted', 'info');
+      Auth.logout();
+    } catch (err) {
+      showToast('Failed to delete account', 'error');
+    }
+  });
+}
+
+function closeProfileSafely() {
+  if (hasProfileChanges()) {
+    modalPendingClose = 'profile';
+    unsavedOverlay.classList.add('open');
+  } else {
+    profileOverlay.classList.remove('open');
+  }
+}
+
+if (closeProfileBtn) {
+  closeProfileBtn.addEventListener('click', closeProfileSafely);
+}
+
+if (discardChangesBtn) {
+  discardChangesBtn.addEventListener('click', () => {
+    unsavedOverlay.classList.remove('open');
+    if (modalPendingClose === 'profile') {
+      profileOverlay.classList.remove('open');
+    } else if (modalPendingClose === 'personalization') {
+      personalizationOverlay.classList.remove('open');
+    }
+    modalPendingClose = null;
+    showToast('Changes discarded', 'info');
+  });
+}
+
+if (saveAndCloseBtn) {
+  saveAndCloseBtn.addEventListener('click', async () => {
+    unsavedOverlay.classList.remove('open');
+    let msg = 'Changes saved';
+    if (modalPendingClose === 'profile') {
+      await saveProfile();
+    } else if (modalPendingClose === 'personalization') {
+      await savePersonalization();
+      msg = 'Preferences saved successfully';
+    }
+    modalPendingClose = null;
+    showToast(msg, 'success');
+  });
+}
+
+// Removed old password toggle logic
+
+async function saveProfile() {
+  const { name, gender, profession } = getProfileCurrentState();
+  const body = { name, gender, profession };
+  
+  try {
+    await UserAPI.patchProfile(body);
+    profileOverlay.classList.remove('open');
+    loadUserProfile(); // Refresh name on badge
+    return true;
+  } catch (err) {
+    showToast(err.message || 'Failed to update profile', 'error');
+    throw err;
+  }
+}
+
+if (saveProfileBtn) {
+  saveProfileBtn.addEventListener('click', async () => {
+    try {
+      await saveProfile();
+      showToast('Profile updated successfully!', 'success');
+    } catch (err) { /* Toast already shown in saveProfile */ }
+  });
+}
+
+// ─── Personalization Modal Logic ──────────────────────────────────────────
+const menuPersonalizationBtn   = document.getElementById('menuPersonalizationBtn');
+const personalizationOverlay   = document.getElementById('personalizationModalOverlay');
+const closePersonalizationBtn  = document.getElementById('closePersonalizationModal');
+const savePersonalizationBtn   = document.getElementById('savePersonalizationBtn');
+const languageLockBtn          = document.getElementById('languageLockBtn');
+const themeSelectDropdown      = document.getElementById('themeSelectDropdown');
+const defaultSummarySelect     = document.getElementById('defaultSummarySelect');
+const autoDetectToggle         = document.getElementById('autoDetectToggle');
+const privacyDeleteToggle      = document.getElementById('privacyDeleteToggle');
+
+if (menuPersonalizationBtn) {
+  menuPersonalizationBtn.addEventListener('click', () => {
+    personalizationOverlay.classList.add('open');
+    // Load current values
+    const currentTheme = localStorage.getItem('docuchat_theme') || 'dark';
+    if (themeSelectCustom) {
+      themeSelectCustom.setValue(currentTheme);
+    } else if (themeSelectDropdown) {
+      themeSelectDropdown.value = currentTheme;
+    }
+    
+    const savedSummary = localStorage.getItem('docuchat_summary_length') || 'detailed';
+    if (summarySelectCustom) {
+      summarySelectCustom.setValue(savedSummary);
+    } else if (defaultSummarySelect) {
+      defaultSummarySelect.value = savedSummary;
+    }
+    
+    const autoDetect = localStorage.getItem('docuchat_auto_detect') !== 'false';
+    if (autoDetectToggle) autoDetectToggle.checked = autoDetect;
+    
+    const privacyDelete = localStorage.getItem('docuchat_privacy_delete') === 'true';
+    if (privacyDeleteToggle) privacyDeleteToggle.checked = privacyDelete;
+  });
+}
+
+// Handled in personalization modal logic block below
+
+if (languageLockBtn) {
+  languageLockBtn.addEventListener('click', () => {
+    showToast('More languages will come soon!', 'info');
+  });
+}
+
+function getPersonalizationCurrentState() {
+  return {
+    theme: themeSelectDropdown.value,
+    summary: defaultSummarySelect.value,
+    autoDetect: autoDetectToggle.checked,
+    privacyDelete: privacyDeleteToggle.checked
+  };
+}
+
+function hasPersonalizationChanges() {
+  const current = getPersonalizationCurrentState();
+  const savedTheme = localStorage.getItem('docuchat_theme') || 'dark';
+  const savedSummary = localStorage.getItem('docuchat_summary_length') || 'detailed';
+  const savedAutoDetect = localStorage.getItem('docuchat_auto_detect') !== 'false';
+  const savedPrivacyDelete = localStorage.getItem('docuchat_privacy_delete') === 'true';
+
+  return (
+    current.theme !== savedTheme ||
+    current.summary !== savedSummary ||
+    current.autoDetect !== savedAutoDetect ||
+    current.privacyDelete !== savedPrivacyDelete
+  );
+}
+
+async function savePersonalization() {
+  const current = getPersonalizationCurrentState();
+  localStorage.setItem('docuchat_theme', current.theme);
+  localStorage.setItem('docuchat_summary_length', current.summary);
+  localStorage.setItem('docuchat_auto_detect', current.autoDetect);
+  localStorage.setItem('docuchat_privacy_delete', current.privacyDelete);
+
+  document.documentElement.setAttribute('data-theme', current.theme);
+  
+  try {
+    await UserAPI.updatePreferences({
+      theme: current.theme,
+      summary_mode: current.summary
+    });
+  } catch (err) {
+    showToast('Failed to save preferences to backend', 'error');
+  }
+
+  personalizationOverlay.classList.remove('open');
+  return true;
+}
+
+if (savePersonalizationBtn) {
+  savePersonalizationBtn.addEventListener('click', async () => {
+    await savePersonalization();
+    showToast('Preferences applied successfully!', 'success');
+  });
+}
+
+if (closePersonalizationBtn) {
+  closePersonalizationBtn.addEventListener('click', () => {
+    if (hasPersonalizationChanges()) {
+      modalPendingClose = 'personalization';
+      unsavedOverlay.classList.add('open');
+    } else {
+      personalizationOverlay.classList.remove('open');
+    }
+  });
+}
+
+// ─── Sidebar (chat history) ───────────────────────────────────────────────
+const sidebar = initSidebar({
+  listEl:          document.getElementById('chatHistoryList'),
+  searchInput:     document.getElementById('chatSearchInput'),
+  getActiveChatId: () => activeChatId,
+  showToast,
+  onChatSelect:    (id, title) => loadChat(id, title),
+  onChatDelete:    (id)        => { if (activeChatId === id) resetChatView(); },
+});
+
+// ─── Upload controller ────────────────────────────────────────────────────
+const uploader = initUpload({
+  dropZone, fileInput, filesPanel, activeDocBadge, activeDocName, showToast,
+  onUpload: (result) => console.log('File uploaded:', result.original_name),
+  getActiveChatId: () => activeChatId,
+  onNewChatCreated: async (chat) => {
+    activeChatId = chat.id;
+    chatTitle.textContent = 'New Chat';
+    exportBtn.style.display = 'flex';
+    welcomeScreen.style.display = 'none';
+    sidebar.setActive(activeChatId);
+    await sidebar.refresh();
+  }
+});
+
+// ─── Load a chat (open from sidebar) ──────────────────────────────────────
+async function loadChat(chatId, title) {
+  activeChatId = chatId;
+  chatTitle.textContent = title || 'Chat';
+  
+  // Persist for reload
+  localStorage.setItem('activeChatId', chatId);
+  localStorage.setItem('activeChatTitle', title || 'Chat');
+  
+  exportBtn.style.display = 'flex';
+  document.documentElement.style.removeProperty('--welcome-display');
+  welcomeScreen.style.display = 'none';
+  document.querySelectorAll('.message').forEach(m => m.remove());
+  sidebar.setActive(chatId);
+
+  try {
+    const data = await ChatAPI.getChat(chatId);
+    data.messages.forEach(m => appendMessage(chatInner, m.role, m.content));
+    
+    if (data.messages.length === 0) {
+      welcomeScreen.style.display = 'flex';
+    }
+  } catch (err) {
+    showToast('Failed to load chat.', 'error');
+    resetChatView();
+  }
+
+  // Load documents for this specific chat
+  uploader.deselect();
+  await uploader.loadFilesForChat(chatId);
+}
+
+// ─── New Chat button ──────────────────────────────────────────────────────
+const newChatBtn = document.getElementById('newChatBtn');
+if (newChatBtn) {
+  newChatBtn.addEventListener('click', async () => {
+    try {
+      const chat = await ChatAPI.newChat();
+      activeChatId = chat.id;
+      chatTitle.textContent = 'New Chat';
+      exportBtn.style.display = 'flex';
+      document.querySelectorAll('.message').forEach(m => m.remove());
+      welcomeScreen.style.display = 'flex';
+      sidebar.setActive(chat.id);
+      await sidebar.refresh();
+      
+      uploader.deselect();
+      await uploader.loadFilesForChat(chat.id);
+    } catch (err) {
+      showToast('Failed to create chat.', 'error');
+    }
+  });
+}
+
+// ─── Send message ─────────────────────────────────────────────────────────
+async function sendMessage() {
+  const content = msgInput.value.trim();
+  if (!content || isTyping) return;
+
+  if (!activeChatId) {
+    try {
+      const chat = await ChatAPI.newChat();
+      activeChatId = chat.id;
+      exportBtn.style.display = 'flex';
+      welcomeScreen.style.display = 'none';
+    } catch (err) {
+      showToast('Failed to create chat.', 'error');
+      return;
+    }
+  }
+
+  const language    = document.getElementById('languageSelect').value;
+  const summaryMode = document.getElementById('summaryModeSelect').value || null;
+  const fileId      = uploader.getActiveFileId();
+
+  welcomeScreen.style.display = 'none';
+  appendMessage(chatInner, 'user', content);
+  msgInput.value = '';
+  autoResize(msgInput);
+  sendBtn.disabled = true;
+  isTyping = true;
+
+  const typingEl = showTypingIndicator(chatInner);
+
+  try {
+    const resp = await ChatAPI.sendMessage(activeChatId, content, fileId, language, summaryMode);
+    typingEl.remove();
+    appendMessage(chatInner, 'assistant', resp.assistant_message.content);
+    await sidebar.refresh();
+    sidebar.setActive(activeChatId);
+    try {
+      const chatData = await ChatAPI.getChat(activeChatId);
+      chatTitle.textContent = chatData.title;
+    } catch (e) {}
+  } catch (err) {
+    typingEl.remove();
+    appendMessage(chatInner, 'assistant', `Error: ${err.message}`);
+  } finally {
+    isTyping = false;
+    sendBtn.disabled = false;
+  }
+}
+
+if (sendBtn) {
+  sendBtn.addEventListener('click', sendMessage);
+  msgInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+  msgInput.addEventListener('input', () => {
+    autoResize(msgInput);
+    sendBtn.disabled = !msgInput.value.trim();
+  });
+}
+
+// ─── Suggestion cards ─────────────────────────────────────────────────────
+document.querySelectorAll('.suggestion-card').forEach(card => {
+  card.addEventListener('click', () => {
+    msgInput.value = card.dataset.prompt;
+    msgInput.dispatchEvent(new Event('input'));
+    msgInput.focus();
+  });
+});
+
+// ─── Upload button ────────────────────────────────────────────────────────
+const uploadTriggerBtn = document.getElementById('uploadTriggerBtn');
+const attachMenu = document.getElementById('attachMenu');
+
+if (uploadTriggerBtn && attachMenu) {
+  uploadTriggerBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const icon = uploadTriggerBtn.querySelector('.plus-icon');
+    const optionsBar = document.querySelector('.options-bar');
+    if (icon) icon.classList.toggle('rotated');
+    
+    const optionsBarNowShifted = optionsBar && optionsBar.classList.contains('shifted');
+    
+    if (optionsBar && !optionsBarNowShifted) {
+      optionsBar.classList.add('shifted');
+      // Delay the menu pop to allow movement to start
+      setTimeout(() => {
+        attachMenu.classList.add('show');
+      }, 150);
+    } else if (optionsBar) {
+      attachMenu.classList.remove('show');
+      setTimeout(() => {
+        optionsBar.classList.remove('shifted');
+      }, 100);
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!attachMenu.contains(e.target) && !uploadTriggerBtn.contains(e.target)) {
+      attachMenu.classList.remove('show');
+      const optionsBar = document.querySelector('.options-bar');
+      if (optionsBar) {
+        setTimeout(() => {
+          optionsBar.classList.remove('shifted');
+        }, 100);
+      }
+      const icon = uploadTriggerBtn.querySelector('.plus-icon');
+      if (icon) icon.classList.remove('rotated');
+    }
+  });
+
+  attachMenu.querySelectorAll('.attach-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const type = item.getAttribute('data-type');
+      if (type) {
+        fileInput.setAttribute('accept', type);
+        fileInput.click();
+      }
+      attachMenu.classList.remove('show');
+      const optionsBar = document.querySelector('.options-bar');
+      if (optionsBar) optionsBar.classList.remove('shifted');
+      const icon = uploadTriggerBtn.querySelector('.plus-icon');
+      if (icon) icon.classList.remove('rotated');
+    });
+  });
+}
+
+// ─── Custom Dropdowns ─────────────────────────────────────────────────────
+document.querySelectorAll('.custom-dropdown').forEach(dropdown => {
+  const selected = dropdown.querySelector('.dropdown-selected');
+  const textSpan = dropdown.querySelector('.sel-text');
+  const input = dropdown.querySelector('input[type="hidden"]');
+  const options = dropdown.querySelectorAll('.dropdown-item');
+
+  selected.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.querySelectorAll('.custom-dropdown.open').forEach(d => {
+      if (d !== dropdown) d.classList.remove('open');
+    });
+    dropdown.classList.toggle('open');
+  });
+
+  options.forEach(opt => {
+    opt.addEventListener('click', () => {
+      const val = opt.getAttribute('data-value');
+      input.value = val;
+      textSpan.textContent = opt.textContent;
+      dropdown.classList.remove('open');
+
+      // Auto-fill prompt for summary dropdown
+      if (dropdown.id === 'summaryDropdown') {
+        const msgInput = document.getElementById('msgInput');
+        const prompts = {
+          detailed: "Give the detailed summary of the document",
+          short: "Provide a short summary of the document",
+          bullet: "Summarize this document in bullet points",
+          executive: "Generate an executive summary of this document",
+          study_notes: "Create detailed study notes from this document"
+        };
+        if (prompts[val]) {
+          msgInput.value = prompts[val];
+          // Trigger auto-resize if imported/available
+          msgInput.dispatchEvent(new Event('input'));
+        }
+      }
+    });
+  });
+});
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.custom-dropdown')) {
+    document.querySelectorAll('.custom-dropdown.open').forEach(d => d.classList.remove('open'));
+  }
+});
+
+// ─── Export PDF ───────────────────────────────────────────────────────────
+if (exportBtn) {
+  exportBtn.addEventListener('click', () => exportChatPDF(activeChatId, showToast));
+}
+
+// ─── Settings modal ───────────────────────────────────────────────────────
+const settingsBtn = document.getElementById('settingsBtn');
+const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+const settingsOverlay = document.getElementById('settingsOverlay');
+const themeSelect = document.getElementById('themeSelect');
+
+if (settingsBtn) {
+  settingsBtn.addEventListener('click', () => settingsOverlay.classList.add('open'));
+}
+if (closeSettingsBtn) {
+  closeSettingsBtn.addEventListener('click', () => settingsOverlay.classList.remove('open'));
+}
+if (settingsOverlay) {
+  settingsOverlay.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
+  });
+}
+if (themeSelect) {
+  themeSelect.addEventListener('change', (e) => {
+    document.documentElement.setAttribute('data-theme', e.target.value);
+    localStorage.setItem('docuchat_theme', e.target.value);
+  });
+}
+
+// ─── Mobile sidebar toggle ────────────────────────────────────────────────
+const sidebarEl     = document.getElementById('sidebar');
+const sidebarToggle = document.getElementById('sidebarToggle');
+if (window.innerWidth <= 768 && sidebarToggle) sidebarToggle.style.display = 'flex';
+if (sidebarToggle) {
+  sidebarToggle.addEventListener('click', () => toggleMobileSidebar(sidebarEl));
+}
+
+// ─── Submenu Toggle ───────────────────────────────────────────────────────
+if (menuChatsToggle && chatsSubmenu) {
+  menuChatsToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isHidden = chatsSubmenu.style.display === 'none';
+    chatsSubmenu.style.display = isHidden ? 'flex' : 'none';
+    const arrow = menuChatsToggle.querySelector('.submenu-arrow');
+    if (arrow) arrow.classList.toggle('rotated', isHidden);
+  });
+}
+
+// ─── Reset chat view ──────────────────────────────────────────────────────
+function resetChatView() {
+  activeChatId = null;
+  chatTitle.textContent = '';
+  localStorage.removeItem('activeChatId');
+  localStorage.removeItem('activeChatTitle');
+  exportBtn.style.display = 'none';
+  document.querySelectorAll('.message').forEach(m => m.remove());
+  document.documentElement.style.removeProperty('--welcome-display');
+  welcomeScreen.style.display = 'flex';
+  filesPanel.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 12px;">Select a chat to see its documents.</div>';
+}
+
+// ─── Init: restore theme ──────────────────────────────────────────────────
+const savedTheme = localStorage.getItem('docuchat_theme') || 'dark';
+document.documentElement.setAttribute('data-theme', savedTheme);
+if (themeSelect) themeSelect.value = savedTheme;
+// Restore session on load
+window.addEventListener('DOMContentLoaded', () => {
+  const savedId = localStorage.getItem('activeChatId');
+  const savedTitle = localStorage.getItem('activeChatTitle');
+  if (savedId && savedTitle) {
+    welcomeScreen.style.display = 'none';
+    // Attempt to load multiple times if needed to ensure history is ready
+    let attempts = 0;
+    const restore = setInterval(() => {
+      const item = document.getElementById(`chat-item-${savedId}`);
+      if (item || attempts > 10) {
+        loadChat(parseInt(savedId), savedTitle);
+        if (sidebar && sidebar.setActive) sidebar.setActive(parseInt(savedId));
+        clearInterval(restore);
+      }
+      attempts++;
+    }, 200);
+  }
+});
