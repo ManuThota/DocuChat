@@ -121,20 +121,55 @@ def summarize(
     language: str = "English",
 ) -> str:
     """
-    Summarize document text using Llama 3.1 via Groq.
+    Summarize document text using a hybrid Map-Reduce approach.
     
-    All modes (short, detailed, etc.) are now routed through Groq for 
-    maximum reliability and instruction-following quality.
-
-    Args:
-        text:     Document text to summarize.
-        mode:     Summary style.
-        language: Output language.
-
-    Returns:
-        Summary string.
+    Small documents (<18k chars) are processed in one shot via Groq.
+    Large documents are chunked, summarized via HuggingFace BART (Map),
+    and then refined by Groq Llama 3.1 (Reduce).
     """
-    return _groq_summarize(text, mode, language)
+    if len(text) < 18000:
+        return _groq_summarize(text, mode, language)
+        
+    # Large document logic (Map-Reduce)
+    chunk_size = 12000
+    intermediate_summaries = []
+    
+    # Map Step: Fast extractive summary for each chunk
+    for i in range(0, min(len(text), 200000), chunk_size):
+        chunk = text[i:i+chunk_size]
+        try:
+            summary = _hf_fast_summary(chunk)
+            if summary:
+                intermediate_summaries.append(summary)
+        except Exception:
+            # Fallback: take first sentence if HF fails
+            intermediate_summaries.append(chunk[:300] + "...")
+            
+    combined_text = "\n\n".join(intermediate_summaries)
+    
+    # Reduce Step: Final intelligent summary via Groq
+    return _groq_summarize(combined_text, mode, language)
+
+
+def _hf_fast_summary(text: str) -> str:
+    """Direct POST to HF Inference API for fast extractive chunking."""
+    import json
+    client = _hf_client()
+    
+    payload = {
+        "inputs": text[:4000],
+        "parameters": {"max_length": 250, "min_length": 50, "do_sample": False}
+    }
+    
+    # Use low-level post to avoid InferenceClient keyword issues
+    response_bytes = client.post(json=payload, model=HF_SUMMARY_MODEL)
+    res = json.loads(response_bytes.decode("utf-8"))
+    
+    if isinstance(res, list) and len(res) > 0:
+        return res[0].get("summary_text", "")
+    elif isinstance(res, dict):
+        return res.get("summary_text", "")
+    return ""
 
 
 def _groq_summarize(text: str, mode: str, language: str) -> str:
@@ -165,7 +200,7 @@ def _groq_summarize(text: str, mode: str, language: str) -> str:
             },
             {
                 "role": "user",
-                "content": f"Document Text:\n\n{text[:150000]}",
+                "content": f"Document Text:\n\n{text[:20000]}",
             },
         ],
         max_tokens=2048,
