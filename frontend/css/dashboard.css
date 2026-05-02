@@ -1089,15 +1089,9 @@
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
 [data-theme="light"] .input-box-wrapper {
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(0, 0, 0, 0.02);
   border-color: rgba(0, 0, 0, 0.1);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-}
-.input-box-wrapper:focus-within {
-  /* Removed white border and glow for a cleaner look */
-}
-[data-theme="light"] .input-box-wrapper {
-  background: rgba(0, 0, 0, 0.02);
 }
 
 .msg-textarea {
