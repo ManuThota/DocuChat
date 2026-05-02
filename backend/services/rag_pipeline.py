@@ -144,7 +144,21 @@ def retrieve_relevant_chunks(query: str, index_path: str, top_k: int = 4) -> lis
     k = min(top_k, index.ntotal)
     _, indices = index.search(query_vec, k)
 
-    return [chunks[i] for i in indices[0] if i < len(chunks)]
+    # Retrieve chunks with neighboring context for better continuity
+    results = []
+    seen_indices = set()
+    for i in indices[0]:
+        if i >= len(chunks) or i < 0:
+            continue
+        # Add the match and its immediate neighbors (one before, one after)
+        # This helps "complete" sections and provides better flow.
+        for offset in [-1, 0, 1]:
+            idx = i + offset
+            if 0 <= idx < len(chunks) and idx not in seen_indices:
+                results.append(chunks[idx])
+                seen_indices.add(idx)
+                
+    return results[:top_k * 2] # Limit to avoid overwhelming the model
 
 
 # ─── Query Entry Points ───────────────────────────────────────────────────────
@@ -156,7 +170,7 @@ def answer_question(
     history: list[dict] | None = None,
 ) -> str:
     """Full RAG pipeline: embed query → retrieve chunks → generate answer."""
-    chunks  = retrieve_relevant_chunks(question, index_path, top_k=4)
+    chunks  = retrieve_relevant_chunks(question, index_path, top_k=8)
     context = "\n\n".join(chunks) if chunks else ""
     return generate_answer(question, context, language=language, history=history)
 

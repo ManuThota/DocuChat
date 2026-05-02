@@ -84,17 +84,24 @@ def generate_answer(
 
     if context.strip():
         system_content = (
-            f"You are a helpful document assistant. Answer questions accurately "
-            f"based only on the provided document context. Be concise. "
-            f"Always respond in {language}. Do not use any emojis."
+            f"You are a highly intelligent and targeted document assistant. "
+            f"Provide answers in {language}. "
+            f"STRICT RULES:\n"
+            f"1. ONLY answer the specific USER QUESTION. Do NOT talk about other topics in the document.\n"
+            f"2. Do NOT provide a 'Table of Contents', 'Overview', or a list of sections.\n"
+            f"3. Do NOT provide a 'Summary' of the whole document unless the user explicitly used the word 'summarize'.\n"
+            f"4. If the user asks about 'Docker Network', do NOT mention 'Docker Images', 'Containers', etc.\n"
+            f"5. Start your response immediately with the answer. No 'The document says...' or 'Based on the context...' introductions.\n"
+            f"6. Do not use emojis. Use clean Markdown."
         )
         user_content = (
-            f"Document context:\n{context[:4000]}\n\n"
-            f"Question: {question}"
+            f"DOCUMENT CONTEXT:\n{context[:12000]}\n\n"
+            f"USER QUESTION: {question}"
         )
     else:
         system_content = (
-            f"You are a helpful AI assistant. Answer clearly and concisely in {language}. Do not use any emojis."
+            f"You are a helpful AI assistant. Answer clearly and concisely in {language}. "
+            f"Do not use any emojis. Use Markdown formatting."
         )
         user_content = question
 

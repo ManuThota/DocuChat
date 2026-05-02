@@ -1130,7 +1130,7 @@
 
 .send-btn {
   width: 36px; height: 36px;
-  border-radius: var(--radius-sm);
+  border-radius: 50%;
   background: transparent;
   border: none;
   color: var(--text-primary);
@@ -1140,7 +1140,7 @@
   flex-shrink: 0;
 }
 .send-btn:hover:not(:disabled) { 
-  background: var(--bg-elevated); 
+  background: transparent; 
 }
 .send-btn:hover:not(:disabled) .rocket-icon {
   animation: rocket-launch 0.5s ease infinite alternate;

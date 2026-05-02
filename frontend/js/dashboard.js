@@ -568,9 +568,22 @@ async function sendMessage() {
     }
   }
 
-  const language    = document.getElementById('languageSelect').value;
-  const summaryMode = document.getElementById('summaryModeSelect').value || null;
-  const fileId      = uploader.getActiveFileId();
+  const language = document.getElementById('languageSelect').value;
+  
+  // Only use summary mode if the content exactly matches a summary trigger phrase.
+  // This prevents regular questions from being treated as summary requests.
+  const summaryPrompts = {
+    detailed: "Give the detailed summary of the document",
+    short: "Provide a short summary of the document",
+    bullet: "Summarize this document in bullet points",
+    executive: "Generate an executive summary of this document",
+    study_notes: "Create detailed study notes from this document"
+  };
+  const summaryModeSelect = document.getElementById('summaryModeSelect');
+  const currentMode = summaryModeSelect ? summaryModeSelect.value : null;
+  const summaryMode = (currentMode && content === summaryPrompts[currentMode]) ? currentMode : null;
+  
+  const fileId = uploader.getActiveFileId();
 
   welcomeScreen.style.display = 'none';
   appendMessage(chatInner, 'user', content);
