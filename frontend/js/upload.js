@@ -90,7 +90,7 @@ export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, ac
       <div class="upload-progress-container">
         <div class="upload-progress-bar" style="width: 0%"></div>
       </div>
-      <div class="upload-text">Uploading 0%</div>
+      <div class="upload-text">Processing document...</div>
       <div class="doc-card-name" style="font-size:10px; margin-top:4px;">${file.name}</div>
     `;
     
@@ -102,13 +102,16 @@ export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, ac
     }
 
     const progressBar = placeholder.querySelector('.upload-progress-bar');
-    const progressText = placeholder.querySelector('.upload-text');
 
     try {
       const result = await UploadAPI.uploadFileWithProgress(file, chatId, (percent) => {
-        progressBar.style.width = `${percent}%`;
-        progressText.textContent = `Uploading ${percent}%`;
+        // Cap visual progress at 95% until server actually finishes processing
+        const visualPercent = Math.min(percent, 95);
+        progressBar.style.width = `${visualPercent}%`;
       });
+      
+      // Complete the bar only when server response is received
+      progressBar.style.width = '100%';
       
       activeFileId = result.id;
       localStorage.setItem('docuchat_active_file_id', result.id);
@@ -217,6 +220,7 @@ export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, ac
     getActiveFileId: () => activeFileId,
     loadFilesForChat,
     deselect,
+    restore,
   };
 }
 
