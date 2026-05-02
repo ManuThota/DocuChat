@@ -129,55 +129,57 @@ def summarize(
     language: str = "English",
 ) -> str:
     """
-    Summarize document text using a hybrid Map-Reduce approach.
+    Summarize document text using an all-Groq Map-Reduce approach.
     
-    Small documents (<18k chars) are processed in one shot via Groq.
-    Large documents are chunked, summarized via HuggingFace BART (Map),
-    and then refined by Groq Llama 3.1 (Reduce).
+    Small documents (<18k chars) are processed in one shot.
+    Large documents are chunked into 20k-char blocks, summarized via 
+    Llama 3-8b-instant (Map), then synthesized by Llama 3.1-70b (Reduce).
     """
     if len(text) < 18000:
         return _groq_summarize(text, mode, language)
         
     # Large document logic (Map-Reduce)
-    chunk_size = 12000
+    chunk_size = 20000
     intermediate_summaries = []
     
-    # Map Step: Fast extractive summary for each chunk
-    for i in range(0, min(len(text), 200000), chunk_size):
+    # Map Step: Summarize each 20k block using the faster 8B model
+    for i in range(0, min(len(text), 300000), chunk_size):
         chunk = text[i:i+chunk_size]
         try:
-            summary = _hf_fast_summary(chunk)
+            summary = _groq_map_summary(chunk, language)
             if summary:
                 intermediate_summaries.append(summary)
-        except Exception:
-            # Fallback: take first sentence if HF fails
-            intermediate_summaries.append(chunk[:300] + "...")
+        except Exception as e:
+            print(f"[Summary] Map step failed for chunk {i}: {e}")
+            intermediate_summaries.append(chunk[:500] + "...")
             
     combined_text = "\n\n".join(intermediate_summaries)
     
-    # Reduce Step: Final intelligent summary via Groq
+    # Reduce Step: Final high-quality synthesis
     return _groq_summarize(combined_text, mode, language)
 
 
-def _hf_fast_summary(text: str) -> str:
-    """Direct POST to HF Inference API for fast extractive chunking."""
-    import json
-    client = _hf_client()
-    
-    payload = {
-        "inputs": text[:4000],
-        "parameters": {"max_length": 250, "min_length": 50, "do_sample": False}
-    }
-    
-    # Use low-level post to avoid InferenceClient keyword issues
-    response_bytes = client.post(json=payload, model=HF_SUMMARY_MODEL)
-    res = json.loads(response_bytes.decode("utf-8"))
-    
-    if isinstance(res, list) and len(res) > 0:
-        return res[0].get("summary_text", "")
-    elif isinstance(res, dict):
-        return res.get("summary_text", "")
-    return ""
+def _groq_map_summary(text: str, language: str) -> str:
+    """Fast, accurate intermediate summary for large documents."""
+    client = _groq_client()
+    response = client.chat.completions.create(
+        model="llama-3-8b-8192", 
+        messages=[
+            {
+                "role": "system", 
+                "content": (
+                    f"Summarize the following text segment for a larger document report. "
+                    f"Capture the UNIQUE core content, headings, and technical details. "
+                    f"IGNORE repetitive page headers, footers, or disclaimer text. "
+                    f"Respond in {language}. Do NOT guess or infer sections. ONLY report what is explicitly there."
+                )
+            },
+            {"role": "user", "content": text},
+        ],
+        max_tokens=1000,
+        temperature=0.2,
+    )
+    return response.choices[0].message.content.strip()
 
 
 def _groq_summarize(text: str, mode: str, language: str) -> str:
@@ -186,10 +188,10 @@ def _groq_summarize(text: str, mode: str, language: str) -> str:
     
     instructions = {
         "short":       "Provide a concise 1-2 paragraph summary of the text.",
-        "detailed":    "Provide a comprehensive, multi-paragraph summary covering all main points in detail.",
-        "bullet":      "Summarize the text into clear, high-level bullet points using Markdown.",
-        "executive":   "Write a professional executive summary covering key findings, decisions, and recommendations.",
-        "study_notes": "Create detailed study notes with clear headings, key concepts, definitions, and examples.",
+        "detailed":    "Provide a comprehensive, chapter-by-chapter detailed summary. Merge similar segments into single high-quality sections.",
+        "bullet":      "Summarize the text into clear, high-level bullet points. Maintain the original document flow and hierarchy.",
+        "executive":   "Write a professional executive summary covering key findings, decisions, and recommendations in chronological order.",
+        "study_notes": "Create highly structured study notes. Use bold headings for chapters/sections, define key concepts, and include examples.",
     }
     instruction = instructions.get(mode, "Summarize the following text")
 
@@ -199,20 +201,23 @@ def _groq_summarize(text: str, mode: str, language: str) -> str:
             {
                 "role": "system",
                 "content": (
-                    f"You are an expert document analyst. "
+                    f"You are a professional document analyst. "
                     f"Your task is to: {instruction}. "
-                    f"IMPORTANT: You must process the ENTIRE provided text and ensure no key details are missed. "
-                    f"Respond in {language}. Do not use any emojis. "
-                    f"Format the output clearly using Markdown."
+                    f"STRICT RULES (CRITICAL):\n"
+                    f"1. **CONSOLIDATION**: If multiple segments discuss the same chapter or topic (e.g. 'Git Configuration' or 'GUI Clients'), you MUST MERGE them into ONE single rich section. Do NOT create 'Continued' sections. Do NOT repeat the same heading.\n"
+                    f"2. **NO INFERENCE**: Do NOT guess, 'infer', or imagine content. If a section is mentioned but has no details in the text, SKIP IT. NEVER say 'it can be inferred' or 'this section is not mentioned'. Only report what is EXPLICITLY there.\n"
+                    f"3. **HEADINGS**: Use the ACTUAL chapter/section names from the document as ## headers. Do NOT use generic 'Section 1, Section 2' numbering unless that is how the document is written.\n"
+                    f"4. **FACTUAL ONLY**: No filler text. No introductory fluff. No 'This chapter covers'. Just the facts from the document.\n"
+                    f"Respond in {language}. Do not use emojis."
                 ),
             },
             {
                 "role": "user",
-                "content": f"Document Text:\n\n{text[:20000]}",
+                "content": f"Document Text:\n\n{text[:100000]}",
             },
         ],
-        max_tokens=2048,
-        temperature=0.4,
+        max_tokens=4096,
+        temperature=0.3,
     )
     return response.choices[0].message.content.strip()
 
