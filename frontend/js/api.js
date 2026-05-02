@@ -127,6 +127,36 @@ export const UploadAPI = {
     if (chatId) fd.append('chat_id', chatId);
     return apiFetch('/upload/document', { method: 'POST', body: fd });
   },
+  uploadFileWithProgress: (file, chatId = null, onProgress) => {
+    return new Promise((resolve, reject) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      if (chatId) fd.append('chat_id', chatId);
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${BASE_URL}/upload/document`);
+      
+      const token = localStorage.getItem(TOKEN_KEY);
+      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) {
+          const percent = Math.round((e.loaded / e.total) * 100);
+          onProgress(percent);
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(JSON.parse(xhr.responseText));
+        } else {
+          reject(new Error(xhr.responseText || `Status ${xhr.status}`));
+        }
+      };
+      xhr.onerror = () => reject(new Error('Network error'));
+      xhr.send(fd);
+    });
+  },
   listFiles:  () => apiFetch('/upload/files'),
   deleteFile: (id) => apiFetch(`/upload/files/${id}`, { method: 'DELETE' }),
 };

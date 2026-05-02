@@ -496,6 +496,7 @@ const uploader = initUpload({
     await sidebar.refresh();
   }
 });
+uploader.restore();
 
 // ─── Load a chat (open from sidebar) ──────────────────────────────────────
 async function loadChat(chatId, title) {

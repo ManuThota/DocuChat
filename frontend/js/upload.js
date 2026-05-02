@@ -83,27 +83,36 @@ export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, ac
       }
     }
 
-    // Show uploading placeholder in the grid
+    // Show progress-bar placeholder in the grid
     const placeholder = document.createElement('div');
     placeholder.className = 'doc-card uploading';
     placeholder.innerHTML = `
-      <div class="upload-progress-ring"></div>
-      <div class="upload-text">Uploading</div>
+      <div class="upload-progress-container">
+        <div class="upload-progress-bar" style="width: 0%"></div>
+      </div>
+      <div class="upload-text">Uploading 0%</div>
       <div class="doc-card-name" style="font-size:10px; margin-top:4px;">${file.name}</div>
     `;
     
-    // Add to the grid or replace current empty state
     const grid = filesPanel.querySelector('.doc-cards-grid');
-    if (grid) {
-      grid.appendChild(placeholder);
-    } else {
+    if (grid) grid.appendChild(placeholder);
+    else {
       filesPanel.innerHTML = '<div class="doc-cards-grid"></div>';
       filesPanel.querySelector('.doc-cards-grid').appendChild(placeholder);
     }
 
+    const progressBar = placeholder.querySelector('.upload-progress-bar');
+    const progressText = placeholder.querySelector('.upload-text');
+
     try {
-      const result = await UploadAPI.uploadFile(file, chatId);
+      const result = await UploadAPI.uploadFileWithProgress(file, chatId, (percent) => {
+        progressBar.style.width = `${percent}%`;
+        progressText.textContent = `Uploading ${percent}%`;
+      });
+      
       activeFileId = result.id;
+      localStorage.setItem('docuchat_active_file_id', result.id);
+      localStorage.setItem('docuchat_active_file_name', result.original_name);
 
       activeDocName.textContent = result.original_name;
       activeDocBadge.style.display = 'flex';
@@ -114,8 +123,20 @@ export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, ac
       await loadFilesForChat(chatId);
     } catch (err) {
       showToast(`Upload failed: ${err.message}`, 'error');
-      await loadFilesForChat(chatId); // Refresh to remove placeholder
+      await loadFilesForChat(chatId);
     }
+  }
+
+  function restore() {
+    const savedId = localStorage.getItem('docuchat_active_file_id');
+    const savedName = localStorage.getItem('docuchat_active_file_name');
+    if (savedId && savedName) {
+      activeFileId = parseInt(savedId);
+      activeDocName.textContent = savedName;
+      activeDocBadge.style.display = 'flex';
+      return activeFileId;
+    }
+    return null;
   }
 
 
