@@ -174,6 +174,6 @@ def summarize_document(
     with open(chunks_file, "r", encoding="utf-8") as f:
         chunks = f.read().split("\n<<<CHUNK>>>\n")
 
-    # Use first 6 chunks (BART has ~1024-token input limit)
-    text = " ".join(chunks[:6])
+    # Use up to 500 chunks (Llama 3.1 8B has 128k context, so we can fit ~150k chars comfortably)
+    text = " ".join(chunks[:500])
     return summarize(text, mode=mode, language=language)

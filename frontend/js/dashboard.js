@@ -491,7 +491,7 @@ const uploader = initUpload({
     activeChatId = chat.id;
     chatTitle.textContent = 'New Chat';
     exportBtn.style.display = 'flex';
-    welcomeScreen.style.display = 'none';
+    welcomeScreen.style.display = 'flex';
     sidebar.setActive(activeChatId);
     await sidebar.refresh();
   }
@@ -795,7 +795,6 @@ window.addEventListener('DOMContentLoaded', () => {
   const savedId = localStorage.getItem('activeChatId');
   const savedTitle = localStorage.getItem('activeChatTitle');
   if (savedId && savedTitle) {
-    welcomeScreen.style.display = 'none';
     // Attempt to load multiple times if needed to ensure history is ready
     let attempts = 0;
     const restore = setInterval(() => {

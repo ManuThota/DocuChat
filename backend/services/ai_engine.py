@@ -157,13 +157,15 @@ def _groq_summarize(text: str, mode: str, language: str) -> str:
                 "role": "system",
                 "content": (
                     f"You are an expert document analyst. "
-                    f"{instruction} Respond in {language}. Do not use any emojis. "
+                    f"Your task is to: {instruction}. "
+                    f"IMPORTANT: You must process the ENTIRE provided text and ensure no key details are missed. "
+                    f"Respond in {language}. Do not use any emojis. "
                     f"Format the output clearly using Markdown."
                 ),
             },
             {
                 "role": "user",
-                "content": f"Document Text:\n\n{text[:6000]}",
+                "content": f"Document Text:\n\n{text[:150000]}",
             },
         ],
         max_tokens=2048,
