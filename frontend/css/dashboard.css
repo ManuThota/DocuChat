@@ -936,6 +936,51 @@
 .msg-bubble hr { border: 0; border-top: 1px solid var(--border); margin: 20px 0; }
 .message.assistant .msg-bubble { white-space: normal; } /* Markdown handles whitespace */
 
+/* Code Blocks Styling */
+.msg-bubble pre {
+  background: #0d0d0d;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin: 16px 0;
+  overflow-x: auto;
+  position: relative;
+}
+.msg-bubble code {
+  font-family: 'Fira Code', 'Courier New', Courier, monospace;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #e0e0e0;
+}
+.copy-code-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s;
+  opacity: 0; /* Hidden by default */
+}
+.msg-bubble pre:hover .copy-code-btn {
+  opacity: 1; /* Show on hover */
+}
+.copy-code-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+.copy-code-btn.copied {
+  color: var(--success);
+  border-color: var(--success);
+}
+
 /* Typing indicator */
 .typing-indicator .msg-bubble {
   display: flex;

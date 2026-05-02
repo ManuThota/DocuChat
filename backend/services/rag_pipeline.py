@@ -153,11 +153,12 @@ def answer_question(
     question: str,
     index_path: str,
     language: str = "English",
+    history: list[dict] | None = None,
 ) -> str:
     """Full RAG pipeline: embed query → retrieve chunks → generate answer."""
     chunks  = retrieve_relevant_chunks(question, index_path, top_k=4)
     context = "\n\n".join(chunks) if chunks else ""
-    return generate_answer(question, context, language=language)
+    return generate_answer(question, context, language=language, history=history)
 
 
 def summarize_document(

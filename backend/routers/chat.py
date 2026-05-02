@@ -85,6 +85,19 @@ async def send_message(
     if chat is None:
         raise HTTPException(status_code=404, detail="Chat not found.")
 
+    # ─── Fetch recent context ─────────────────────────────────────────────────
+    # We load the last 8 messages to provide conversational memory
+    hist_res = await db.execute(
+        select(Message)
+        .where(Message.chat_id == chat.id)
+        .order_by(Message.created_at.desc())
+        .limit(8)
+    )
+    history = [
+        {"role": m.role, "content": m.content}
+        for m in reversed(hist_res.scalars().all())
+    ]
+
     # ─── Persist user message ─────────────────────────────────────────────────
     user_msg = Message(chat_id=chat.id, role="user", content=body.content)
     db.add(user_msg)
@@ -107,11 +120,11 @@ async def send_message(
         if body.summary_mode and index_path:
             ai_text = summarize_document(index_path, mode=body.summary_mode, language=body.language)
         elif index_path:
-            ai_text = answer_question(body.content, index_path, language=body.language)
+            ai_text = answer_question(body.content, index_path, language=body.language, history=history)
         else:
             # No document context — use model's own knowledge
             from backend.services.ai_engine import generate_answer
-            ai_text = generate_answer(body.content, context="", language=body.language)
+            ai_text = generate_answer(body.content, context="", language=body.language, history=history)
     except Exception as exc:
         print(f"[Chat] AI generation failed: {exc}")
         raise HTTPException(

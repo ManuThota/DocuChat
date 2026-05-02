@@ -66,6 +66,7 @@ def generate_answer(
     question: str,
     context: str,
     language: str = "English",
+    history: list[dict] | None = None,
 ) -> str:
     """
     Generate a grounded answer using Llama-3.1-8B via Groq.
@@ -74,6 +75,7 @@ def generate_answer(
         question: The user's question.
         context:  Retrieved document chunks. Pass "" for general questions.
         language: Target response language.
+        history:  List of previous messages: [{"role": "user", "content": "..."}, ...]
 
     Returns:
         AI-generated answer string.
@@ -96,13 +98,16 @@ def generate_answer(
         )
         user_content = question
 
+    messages = [{"role": "system", "content": system_content}]
+    if history:
+        # Only take last 10 messages to avoid token limits
+        messages.extend(history[-10:])
+    messages.append({"role": "user", "content": user_content})
+
     response = client.chat.completions.create(
         model=GROQ_CHAT_MODEL,
-        messages=[
-            {"role": "system", "content": system_content},
-            {"role": "user",   "content": user_content},
-        ],
-        max_tokens=400,
+        messages=messages,
+        max_tokens=2048, # Increased from 400 to prevent truncation
         temperature=0.3,
     )
     return response.choices[0].message.content.strip()
@@ -116,10 +121,10 @@ def summarize(
     language: str = "English",
 ) -> str:
     """
-    Summarize document text.
-
-    short / detailed  → BART-large-cnn via HuggingFace (fast, extractive)
-    bullet / executive / study_notes → Llama 3.1 via Groq (follows instructions)
+    Summarize document text using Llama 3.1 via Groq.
+    
+    All modes (short, detailed, etc.) are now routed through Groq for 
+    maximum reliability and instruction-following quality.
 
     Args:
         text:     Document text to summarize.
@@ -129,39 +134,17 @@ def summarize(
     Returns:
         Summary string.
     """
-    if mode in ("short", "detailed"):
-        return _bart_summarize(text, mode, language)
-    else:
-        return _groq_summarize(text, mode, language)
-
-
-def _bart_summarize(text: str, mode: str, language: str) -> str:
-    """BART-based extractive summarization for short/detailed modes."""
-    client = _hf_client()
-    max_len = 150 if mode == "short" else 350
-    min_len = 40  if mode == "short" else 120
-
-    result = client.summarization(
-        text[:4096],
-        model=HF_SUMMARY_MODEL,
-        max_length=max_len,
-        min_length=min_len,
-        do_sample=False,
-    )
-    summary = result.summary_text.strip()
-
-    if language.lower() != "english":
-        summary = _groq_translate(summary, language)
-
-    return summary
+    return _groq_summarize(text, mode, language)
 
 
 def _groq_summarize(text: str, mode: str, language: str) -> str:
-    """Groq-based structured summarization for bullet/executive/study modes."""
+    """Llama 3.1-based summarization via Groq for all modes."""
     client = _groq_client()
-
+    
     instructions = {
-        "bullet":      "Create a clear bullet-point summary using • for each point.",
+        "short":       "Provide a concise 1-2 paragraph summary of the text.",
+        "detailed":    "Provide a comprehensive, multi-paragraph summary covering all main points in detail.",
+        "bullet":      "Summarize the text into clear, high-level bullet points using Markdown.",
         "executive":   "Write a professional executive summary covering key findings, decisions, and recommendations.",
         "study_notes": "Create detailed study notes with clear headings, key concepts, definitions, and examples.",
     }
@@ -174,15 +157,16 @@ def _groq_summarize(text: str, mode: str, language: str) -> str:
                 "role": "system",
                 "content": (
                     f"You are an expert document analyst. "
-                    f"{instruction} Respond in {language}. Do not use any emojis."
+                    f"{instruction} Respond in {language}. Do not use any emojis. "
+                    f"Format the output clearly using Markdown."
                 ),
             },
             {
                 "role": "user",
-                "content": f"Document:\n\n{text[:4000]}",
+                "content": f"Document Text:\n\n{text[:6000]}",
             },
         ],
-        max_tokens=600,
+        max_tokens=2048,
         temperature=0.4,
     )
     return response.choices[0].message.content.strip()
@@ -197,7 +181,7 @@ def _groq_translate(text: str, language: str) -> str:
             {"role": "system", "content": f"Translate the following text to {language}. Return only the translation."},
             {"role": "user",   "content": text},
         ],
-        max_tokens=500,
+        max_tokens=1500, # Increased for translations
         temperature=0.1,
     )
     return response.choices[0].message.content.strip()

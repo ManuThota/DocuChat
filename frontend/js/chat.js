@@ -26,6 +26,7 @@ export function appendMessage(container, role, content) {
   if (role === 'assistant') {
     // Render markdown for assistant
     bubble.innerHTML = marked.parse(content);
+    addCopyButtons(bubble);
   } else {
     bubble.textContent = content;
   }
@@ -37,6 +38,39 @@ export function appendMessage(container, role, content) {
   wrap.scrollIntoView({ behavior: 'smooth', block: 'end' });
 
   return wrap;
+}
+
+function addCopyButtons(element) {
+  const codeBlocks = element.querySelectorAll('pre');
+  codeBlocks.forEach(block => {
+    // Ensure relative positioning for the button
+    block.style.position = 'relative';
+    
+    const button = document.createElement('button');
+    button.className = 'copy-code-btn';
+    button.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      <span>Copy</span>
+    `;
+    
+    button.addEventListener('click', async () => {
+      const code = block.querySelector('code').innerText;
+      try {
+        await navigator.clipboard.writeText(code);
+        const span = button.querySelector('span');
+        span.textContent = 'Copied!';
+        button.classList.add('copied');
+        setTimeout(() => {
+          span.textContent = 'Copy';
+          button.classList.remove('copied');
+        }, 2000);
+      } catch (err) {
+        console.error('Failed to copy:', err);
+      }
+    });
+    
+    block.appendChild(button);
+  });
 }
 
 /**
