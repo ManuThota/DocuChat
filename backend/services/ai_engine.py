@@ -47,7 +47,7 @@ def _groq_client() -> Groq:
             "GROQ_API_KEY is not set. Get a free key at https://console.groq.com/keys "
             "and add GROQ_API_KEY=gsk_... to your .env file."
         )
-    return Groq(api_key=settings.groq_api_key)
+    return Groq(api_key=settings.groq_api_key, timeout=20.0, max_retries=0)
 
 
 def _hf_client() -> InferenceClient:
@@ -57,7 +57,7 @@ def _hf_client() -> InferenceClient:
             "HF_API_KEY is not set. Get a free key at https://huggingface.co/settings/tokens "
             "and add HF_API_KEY=hf_... to your .env file."
         )
-    return InferenceClient(token=settings.hf_api_key)
+    return InferenceClient(token=settings.hf_api_key, timeout=20.0)
 
 
 # ─── Q&A / Chat (Groq → Llama 3.1) ──────────────────────────────────────────
@@ -108,14 +108,13 @@ def generate_answer(
 
     messages = [{"role": "system", "content": system_content}]
     if history:
-        # Only take last 10 messages to avoid token limits
         messages.extend(history[-10:])
     messages.append({"role": "user", "content": user_content})
 
     response = client.chat.completions.create(
         model=GROQ_CHAT_MODEL,
         messages=messages,
-        max_tokens=2048, # Increased from 400 to prevent truncation
+        max_tokens=2048,
         temperature=0.3,
     )
     return response.choices[0].message.content.strip()
@@ -129,69 +128,97 @@ def summarize(
     language: str = "English",
 ) -> str:
     """
-    Summarize document text using an all-Groq Map-Reduce approach.
+    Summarize document text using an optimized Fast Map-Reduce approach.
     
-    Small documents (<18k chars) are processed in one shot.
-    Large documents are chunked into 20k-char blocks, summarized via 
-    Llama 3-8b-instant (Map), then synthesized by Llama 3.1-70b (Reduce).
+    Optimized to prevent timeouts and stay under Groq's 6k TPM limit.
     """
-    if len(text) < 18000:
+    if len(text) < 15000:
         return _groq_summarize(text, mode, language)
         
     # Large document logic (Map-Reduce)
-    chunk_size = 20000
+    # Larger chunks (15k) reduce the number of API calls significantly
+    chunk_size = 15000
     intermediate_summaries = []
     
-    # Map Step: Summarize each 20k block using the faster 8B model
-    for i in range(0, min(len(text), 300000), chunk_size):
+    # Process up to 200k characters for a fast, comprehensive result
+    max_scan = 200000
+    for i in range(0, min(len(text), max_scan), chunk_size):
         chunk = text[i:i+chunk_size]
         try:
-            summary = _groq_map_summary(chunk, language)
+            # Groq 8B is much faster for the map phase
+            summary = _groq_mini_summary(chunk, language)
+            
+            # Silent fallback to HF if Groq is busy
+            if not summary:
+                summary = _hf_fast_summary(chunk[:3000])
+            
             if summary:
                 intermediate_summaries.append(summary)
         except Exception as e:
-            print(f"[Summary] Map step failed for chunk {i}: {e}")
-            intermediate_summaries.append(chunk[:500] + "...")
+            print(f"[AI] Chunk {i} map failed: {e}")
             
-    combined_text = "\n\n".join(intermediate_summaries)
+    if not intermediate_summaries:
+        combined_text = text[:8000] 
+    else:
+        combined_text = "\n\n".join(intermediate_summaries)
     
-    # Reduce Step: Final high-quality synthesis
-    return _groq_summarize(combined_text, mode, language)
+    # Final Synthesis (Stay safe under 6k TPM)
+    return _groq_summarize(combined_text[:10000], mode, language)
 
 
-def _groq_map_summary(text: str, language: str) -> str:
-    """Fast, accurate intermediate summary for large documents."""
-    client = _groq_client()
-    response = client.chat.completions.create(
-        model="llama-3-8b-8192", 
-        messages=[
-            {
-                "role": "system", 
-                "content": (
-                    f"Summarize the following text segment for a larger document report. "
-                    f"Capture the UNIQUE core content, headings, and technical details. "
-                    f"IGNORE repetitive page headers, footers, or disclaimer text. "
-                    f"Respond in {language}. Do NOT guess or infer sections. ONLY report what is explicitly there."
-                )
-            },
-            {"role": "user", "content": text},
-        ],
-        max_tokens=1000,
-        temperature=0.2,
-    )
-    return response.choices[0].message.content.strip()
+def _hf_fast_summary(text: str) -> str:
+    """Use Hugging Face InferenceClient's summarization task."""
+    try:
+        client = _hf_client()
+        # BART has a 1024 token limit (~3500 chars). We use 3000 to be safe.
+        # Passing only text and model to ensure compatibility with all HF library versions
+        result = client.summarization(
+            text[:3000],
+            model=HF_SUMMARY_MODEL
+        )
+        
+        # result is typically a dict with 'summary_text' or a list containing such a dict
+        if isinstance(result, list) and len(result) > 0:
+            return result[0].get("summary_text", "")
+        if isinstance(result, dict):
+            return result.get("summary_text", "")
+        return str(result)
+    except Exception as e:
+        print(f"[HF] Task failed: {e}")
+    return ""
+
+
+def _groq_mini_summary(text: str, language: str) -> str:
+    """Ultra-fast, low-token summary to act as a fallback."""
+    try:
+        client = _groq_client()
+        response = client.chat.completions.create(
+            model="llama-3-8b-8192", 
+            messages=[
+                {"role": "system", "content": f"Summarize VERY briefly (max 40 words) in {language}. List headings if found."},
+                {"role": "user", "content": text[:6000]}
+            ],
+            max_tokens=100,
+            temperature=0.1,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return ""
 
 
 def _groq_summarize(text: str, mode: str, language: str) -> str:
     """Llama 3.1-based summarization via Groq for all modes."""
     client = _groq_client()
     
+    if not text.strip():
+        return "The document appears to be empty or unreadable."
+
     instructions = {
-        "short":       "Provide a concise 1-2 paragraph summary of the text.",
-        "detailed":    "Provide a comprehensive, chapter-by-chapter detailed summary. Merge similar segments into single high-quality sections.",
-        "bullet":      "Summarize the text into clear, high-level bullet points. Maintain the original document flow and hierarchy.",
-        "executive":   "Write a professional executive summary covering key findings, decisions, and recommendations in chronological order.",
-        "study_notes": "Create highly structured study notes. Use bold headings for chapters/sections, define key concepts, and include examples.",
+        "short":       "Provide a concise 1-2 paragraph summary.",
+        "detailed":    "Create an exhaustive, chronological map of the document. Group sections under '## Chapter [X]' or '## [Main Topic]' headers. Format every entry as '### **Section [Number]: [Title]** - [Overview]'.",
+        "bullet":      "Summarize the text into clear bullet points with bold key terms.",
+        "executive":   "Write a professional executive summary for high-level stakeholders.",
+        "study_notes": "Create highly structured study notes with headings, bold definitions, and examples.",
     }
     instruction = instructions.get(mode, "Summarize the following text")
 
@@ -204,20 +231,20 @@ def _groq_summarize(text: str, mode: str, language: str) -> str:
                     f"You are a professional document analyst. "
                     f"Your task is to: {instruction}. "
                     f"STRICT RULES (CRITICAL):\n"
-                    f"1. **CONSOLIDATION**: If multiple segments discuss the same chapter or topic (e.g. 'Git Configuration' or 'GUI Clients'), you MUST MERGE them into ONE single rich section. Do NOT create 'Continued' sections. Do NOT repeat the same heading.\n"
-                    f"2. **NO INFERENCE**: Do NOT guess, 'infer', or imagine content. If a section is mentioned but has no details in the text, SKIP IT. NEVER say 'it can be inferred' or 'this section is not mentioned'. Only report what is EXPLICITLY there.\n"
-                    f"3. **HEADINGS**: Use the ACTUAL chapter/section names from the document as ## headers. Do NOT use generic 'Section 1, Section 2' numbering unless that is how the document is written.\n"
-                    f"4. **FACTUAL ONLY**: No filler text. No introductory fluff. No 'This chapter covers'. Just the facts from the document.\n"
-                    f"Respond in {language}. Do not use emojis."
+                    f"1. **STRICT CHRONOLOGY**: You must follow the document's flow from the very first line to the very last. NEVER skip around.\n"
+                    f"2. **CONTINUOUS FLOW**: Treat the text as a single sequence. If multiple chapters appear, use clear ## headers to separate them.\n"
+                    f"3. **PREMIUM FORMATTING**: Use bold headers and clean spacing. Every section overview must be factual and specific.\n"
+                    f"4. **CONSOLIDATION**: If a section is split across multiple chunks, merge it into one comprehensive entry. Do NOT repeat headings.\n"
+                    f"Respond in {language}. Do not use emojis. Use Markdown."
                 ),
             },
             {
                 "role": "user",
-                "content": f"Document Text:\n\n{text[:100000]}",
+                "content": f"Text to analyze:\n\n{text}",
             },
         ],
         max_tokens=4096,
-        temperature=0.3,
+        temperature=0.0,
     )
     return response.choices[0].message.content.strip()
 
