@@ -39,7 +39,7 @@ class Settings(BaseSettings):
 
     # ─── File Uploads ─────────────────────────────────────────────────────────
     upload_dir: str = "uploads"
-    max_file_size_mb: int = 10
+    max_file_size_mb: int = 50
 
     # ─── CORS ─────────────────────────────────────────────────────────────────
     allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"

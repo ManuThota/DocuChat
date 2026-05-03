@@ -83,17 +83,17 @@ export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, ac
       }
     }
 
-    // Show progress-bar placeholder in the grid
+    // ── Build placeholder card with progress bar ──────────────────────────
     const placeholder = document.createElement('div');
     placeholder.className = 'doc-card uploading';
     placeholder.innerHTML = `
       <div class="upload-progress-container">
-        <div class="upload-progress-bar" style="width: 0%"></div>
+        <div class="upload-progress-bar" id="upbar-${Date.now()}" style="width:0%"></div>
       </div>
-      <div class="upload-text">Processing document...</div>
-      <div class="doc-card-name" style="font-size:10px; margin-top:4px;">${file.name}</div>
+      <div class="upload-text" id="uptext-${Date.now()}">Uploading...</div>
+      <div class="doc-card-name" style="font-size:10px;margin-top:4px;">${file.name}</div>
     `;
-    
+
     const grid = filesPanel.querySelector('.doc-cards-grid');
     if (grid) grid.appendChild(placeholder);
     else {
@@ -102,17 +102,60 @@ export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, ac
     }
 
     const progressBar = placeholder.querySelector('.upload-progress-bar');
+    const uploadText  = placeholder.querySelector('.upload-text');
+
+    // Smooth easing helper — animates bar to a target % over `ms` milliseconds
+    let currentPct = 0;
+    function animateTo(targetPct, ms, label) {
+      if (label && uploadText) uploadText.textContent = label;
+      const start     = currentPct;
+      const diff      = targetPct - start;
+      const startTime = performance.now();
+
+      function step(now) {
+        const elapsed  = now - startTime;
+        const progress = Math.min(elapsed / ms, 1);
+        // Ease-in-out cubic
+        const eased = progress < 0.5
+          ? 4 * progress * progress * progress
+          : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+        currentPct = start + diff * eased;
+        progressBar.style.width = `${currentPct}%`;
+
+        if (progress < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
+
+    // Phase 1 — Slow ramp-up while uploading (0 → 40% over 1.5s)
+    animateTo(40, 1500, 'Uploading...');
 
     try {
-      const result = await UploadAPI.uploadFileWithProgress(file, chatId, (percent) => {
-        // Cap visual progress at 95% until server actually finishes processing
-        const visualPercent = Math.min(percent, 95);
-        progressBar.style.width = `${visualPercent}%`;
+      const uploadPromise = UploadAPI.uploadFileWithProgress(file, chatId, (percent) => {
+        // Map real upload progress (0-100) onto the 40-70% range
+        const mapped = 40 + (percent / 100) * 30;
+        if (mapped > currentPct) {
+          currentPct = mapped;
+          progressBar.style.width = `${currentPct}%`;
+        }
       });
-      
-      // Complete the bar only when server response is received
-      progressBar.style.width = '100%';
-      
+
+      // Phase 2 — Hold at ~70% while server processes/indexes (slow crawl to 70%)
+      animateTo(70, 4000, 'Processing document...');
+
+      const result = await uploadPromise;
+
+      // Phase 3 — Server done: smoothly complete to 100%
+      await new Promise(resolve => {
+        animateTo(100, 600, 'Done!');
+        setTimeout(resolve, 700);
+      });
+
+      // Phase 4 — Fade out the bar gracefully
+      progressBar.style.transition = 'opacity 0.5s ease';
+      progressBar.style.opacity    = '0';
+
       activeFileId = result.id;
       localStorage.setItem('docuchat_active_file_id', result.id);
       localStorage.setItem('docuchat_active_file_name', result.original_name);

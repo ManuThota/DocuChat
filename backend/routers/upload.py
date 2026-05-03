@@ -78,7 +78,7 @@ async def upload_document(
         stored_name=stored_name,
         file_type=ext,
         file_size=len(content),
-        extracted_text=extracted_text[:50000] if extracted_text else None,
+        extracted_text=extracted_text[:500000] if extracted_text else None,
         faiss_index_path=index_path,
     )
     db.add(db_file)
