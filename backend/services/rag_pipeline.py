@@ -170,6 +170,15 @@ def answer_question(
     history: list[dict] | None = None,
 ) -> str:
     """Full RAG pipeline: embed query → retrieve chunks → generate answer."""
+    # Simple greeting detection: don't use context for social greetings
+    greetings = ["hello", "hi", "hey", "hola", "greetings", "how are you", "good morning", "good afternoon", "good evening"]
+    clean_q = question.lower().strip()
+    
+    is_social = any(greet in clean_q for greet in greetings) or len(clean_q) < 3
+    
+    if is_social:
+        return generate_answer(question, context="", language=language, history=history)
+
     chunks  = retrieve_relevant_chunks(question, index_path, top_k=8)
     context = "\n\n".join(chunks) if chunks else ""
     return generate_answer(question, context, language=language, history=history)

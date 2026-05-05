@@ -336,21 +336,24 @@ def _groq_summarize(text: str, mode: str, language: str) -> str:
     mode_instructions = {
         "short": "Write a concise 2-3 paragraph summary of the document's main purpose, key topics, and conclusions.",
         "detailed": (
-            "Create a comprehensive, professional chapter-by-chapter overview of the document. "
-            "For every single chapter and section in the index, provide a thorough summary. "
-            "Format EXACTLY like this:\n"
-            "## 1. Chapter Title\n"
-            "- **Overview**: A detailed 2-3 sentence technical summary of this chapter.\n"
+            "Create a comprehensive technical overview of the entire document. "
+            "Synthesize the content into clear, logical sections using meaningful headings and subheadings. "
+            "Your goal is to provide a deep, professional understanding of the document's structure and core technical details "
+            "without being a literal transcription of the index. "
             "\n"
-            "### 1.1 Sub-section Title\n"
-            "- **Key Concept**: Explain the primary idea or feature here (2-3 sentences).\n"
-            "- **Technical Detail**: Include specific commands, parameters, or technical steps mentioned.\n"
-            "- **Example/Context**: Provide any practical examples given in the text.\n"
+            "Format using this structure:\n"
+            "## [Major Technical Theme/Chapter Group]\n"
+            "Provide a thorough high-level summary of this theme (3-4 sentences).\n"
+            "\n"
+            "### [Specific Topic/Sub-component]\n"
+            "- **Technical Core**: Explain the primary technical concepts or architecture here.\n"
+            "- **Key Procedures**: List important workflows, commands, or configuration steps.\n"
+            "- **Critical Insights**: Mention specific constraints, parameters, or edge cases found in the document.\n"
             "\n"
             "STRICT RULES:\n"
-            "- Cover EVERY section in the index. Do NOT skip or consolidate any headings.\n"
-            "- Use bullet points for descriptions. Be technical and precise.\n"
-            "- Complete the full portion of the document assigned to you."
+            "- Be technical and precise. Use **bold** for all key terms and ```code``` for all syntax.\n"
+            "- Ensure the flow is logical and the summary covers the breadth of the document from start to finish.\n"
+            "- Focus on making the response clear and professional."
         ),
         "bullet": "Summarize into grouped bullet points. Use **bold** for key terms and ### headers for each major topic.",
         "executive": "Write a professional executive summary: a 1-paragraph overview, bold bullet points for key findings, and a Conclusion.",

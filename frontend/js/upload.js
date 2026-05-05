@@ -106,55 +106,71 @@ export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, ac
 
     // Smooth easing helper — animates bar to a target % over `ms` milliseconds
     let currentPct = 0;
+    let animId = null;
+
     function animateTo(targetPct, ms, label) {
       if (label && uploadText) uploadText.textContent = label;
+      
       const start     = currentPct;
       const diff      = targetPct - start;
       const startTime = performance.now();
 
-      function step(now) {
-        const elapsed  = now - startTime;
-        const progress = Math.min(elapsed / ms, 1);
-        // Ease-in-out cubic
-        const eased = progress < 0.5
-          ? 4 * progress * progress * progress
-          : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+      // Cancel previous animation if any
+      if (animId) cancelAnimationFrame(animId);
 
-        currentPct = start + diff * eased;
-        progressBar.style.width = `${currentPct}%`;
+      return new Promise(resolve => {
+        function step(now) {
+          const elapsed  = now - startTime;
+          const progress = Math.min(elapsed / ms, 1);
+          
+          // Ease-in-out cubic
+          const eased = progress < 0.5
+            ? 4 * progress * progress * progress
+            : 1 - Math.pow(-2 * progress + 2, 3) / 2;
 
-        if (progress < 1) requestAnimationFrame(step);
-      }
-      requestAnimationFrame(step);
+          currentPct = start + diff * eased;
+          progressBar.style.width = `${currentPct}%`;
+
+          if (progress < 1) {
+            animId = requestAnimationFrame(step);
+          } else {
+            animId = null;
+            resolve();
+          }
+        }
+        animId = requestAnimationFrame(step);
+      });
     }
 
     // Phase 1 — Slow ramp-up while uploading (0 → 40% over 1.5s)
-    animateTo(40, 1500, 'Uploading...');
+    const phase1 = animateTo(40, 1500, 'Uploading...');
 
     try {
       const uploadPromise = UploadAPI.uploadFileWithProgress(file, chatId, (percent) => {
         // Map real upload progress (0-100) onto the 40-70% range
         const mapped = 40 + (percent / 100) * 30;
         if (mapped > currentPct) {
+          // Update immediately for real progress, but stop the Phase 1 loop if it's slow
           currentPct = mapped;
           progressBar.style.width = `${currentPct}%`;
         }
       });
 
       // Phase 2 — Hold at ~70% while server processes/indexes (slow crawl to 70%)
-      animateTo(70, 4000, 'Processing document...');
+      const phase2 = animateTo(70, 4000, 'Processing document...');
 
       const result = await uploadPromise;
 
       // Phase 3 — Server done: smoothly complete to 100%
-      await new Promise(resolve => {
-        animateTo(100, 600, 'Done!');
-        setTimeout(resolve, 700);
-      });
+      await animateTo(100, 600, 'Done!');
+      
+      // Keep "Done!" visible for a moment
+      await new Promise(r => setTimeout(r, 800));
 
       // Phase 4 — Fade out the bar gracefully
-      progressBar.style.transition = 'opacity 0.5s ease';
+      progressBar.style.transition = 'opacity 0.4s ease';
       progressBar.style.opacity    = '0';
+      await new Promise(r => setTimeout(r, 400));
 
       activeFileId = result.id;
       localStorage.setItem('docuchat_active_file_id', result.id);
