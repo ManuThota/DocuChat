@@ -25,7 +25,7 @@ import faiss
 from huggingface_hub import InferenceClient
 
 from backend.utils.chunker import chunk_text
-from backend.services.ai_engine import generate_answer, summarize
+from backend.services.ai_engine import generate_answer, summarize, summarize_stream
 from backend.config import get_settings
 
 settings = get_settings()
@@ -188,6 +188,84 @@ def summarize_document(
     with open(chunks_file, "r", encoding="utf-8") as f:
         chunks = f.read().split("\n<<<CHUNK>>>\n")
 
-    # Use up to 500 chunks (Llama 3.1 8B has 128k context, so we can fit ~150k chars comfortably)
-    text = " ".join(chunks[:500])
+    # Use up to 5,000 chunks (covers millions of characters)
+    text = " ".join(chunks[:5000])
     return summarize(text, mode=mode, language=language)
+def summarize_document_stream(
+    index_path: str,
+    mode: str = "short",
+    language: str = "English",
+):
+    """Generator version of summarize_document."""
+    chunks_file = index_path + ".chunks"
+    if not os.path.exists(chunks_file):
+        yield "No indexed document found. Please upload a document first."
+        return
+
+    with open(chunks_file, "r", encoding="utf-8") as f:
+        chunks = f.read().split("\n<<<CHUNK>>>\n")
+
+    text = " ".join(chunks[:5000])
+    for part in summarize_stream(text, mode=mode, language=language):
+        yield part
+
+
+async def process_summary_background(
+    message_id: int,
+    index_path: str,
+    mode: str,
+    language: str,
+):
+    """
+    Async background task to process a long summary and update the database record.
+    This bypasses HTTP timeouts entirely. Has full error recovery to prevent stuck spinners.
+    """
+    from backend.database import AsyncSessionLocal
+    from backend.models.chat import Message
+    from sqlalchemy import update
+    import asyncio
+
+    async def _save_to_db(content: str):
+        try:
+            async with AsyncSessionLocal() as db:
+                await db.execute(
+                    update(Message)
+                    .where(Message.id == message_id)
+                    .values(content=content)
+                )
+                await db.commit()
+        except Exception as e:
+            print(f"[BG] DB save failed: {e}")
+
+    try:
+        # 1. Prepare text
+        chunks_file = index_path + ".chunks"
+        if not os.path.exists(chunks_file):
+            await _save_to_db("No indexed document found. Please re-upload the document.")
+            return
+
+        with open(chunks_file, "r", encoding="utf-8") as f:
+            chunks = f.read().split("\n<<<CHUNK>>>\n")
+        text = " ".join(chunks[:5000])
+
+        # 2. Process in a loop — save partial results to DB as each section is done
+        full_summary = ""
+        for part in summarize_stream(text, mode=mode, language=language):
+            full_summary += part
+            await _save_to_db(full_summary)
+            await asyncio.sleep(0.1)
+
+        # 3. Final save (ensure we write even if no parts were yielded)
+        if not full_summary:
+            await _save_to_db("Summary generation failed. The AI service may be temporarily unavailable. Please try again.")
+
+    except Exception as e:
+        print(f"[BG] Background summary crashed: {e}")
+        # CRITICAL: Always write an error to DB so the spinner resolves
+        error_msg = (
+            f"**Summary generation failed.**\n\n"
+            f"**Reason:** {str(e)[:200]}\n\n"
+            f"This is usually caused by hitting the Groq free-tier daily limit (100,000 tokens/day).\n"
+            f"Please wait a few hours and try again."
+        )
+        await _save_to_db(error_msg)

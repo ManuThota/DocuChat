@@ -15,15 +15,23 @@
  * @param {string} content
  * @returns {HTMLElement} The created message element.
  */
-export function appendMessage(container, role, content) {
+export function appendMessage(container, role, content, msgId = null) {
   const wrap   = document.createElement('div');
   wrap.className = `message ${role}`;
+  if (msgId) wrap.dataset.messageId = msgId;
 
 
   const bubble = document.createElement('div');
   bubble.className = 'msg-bubble';
   
-  if (role === 'assistant') {
+  if (content === '[SYNTHESIZING]') {
+    bubble.innerHTML = `
+      <div class="synthesizing-loader">
+        <div class="loader-ring"></div>
+        <div class="loader-text">Analysing Document...</div>
+      </div>
+    `;
+  } else if (role === 'assistant') {
     // Render markdown for assistant
     bubble.innerHTML = marked.parse(content);
     addCopyButtons(bubble);

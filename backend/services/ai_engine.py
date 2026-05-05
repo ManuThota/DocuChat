@@ -43,12 +43,21 @@ from backend.config import get_settings
 settings = get_settings()
 
 # ─── Model identifiers ────────────────────────────────────────────────────────
-# Small/fast model — 6,000 TPM free. Used for Q&A chat.
-GROQ_CHAT_MODEL  = "llama-3.1-8b-instant"
-# High-quality 70B model — for final summary synthesis.
-GROQ_SUM_MODEL   = "llama-3.3-70b-versatile"
-# Fast map-phase model — reuses the chat model (llama3-8b-8192 is decommissioned).
-GROQ_MINI_MODEL  = "llama-3.1-8b-instant"
+# Groq Models — each has its OWN independent daily token limit.
+# By rotating through all of them we get effectively unlimited capacity.
+# Rotation order: best → cheapest → fallback
+GROQ_MODELS = [
+    "meta-llama/llama-4-scout-17b-16e-instruct",  # Llama 4 — separate limit
+    "qwen/qwen3-32b",                              # Qwen3 32B — separate limit
+    "openai/gpt-oss-20b",                          # GPT-OSS 20B — separate limit
+    "openai/gpt-oss-120b",                         # GPT-OSS 120B — separate limit
+    "llama-3.3-70b-versatile",                     # Llama 3.3 70B — may be exhausted
+    "llama-3.1-8b-instant",                        # Llama 3.1 8B — fallback
+]
+# Primary models for quality tasks (rotated automatically if exhausted)
+GROQ_SUM_MODEL   = "meta-llama/llama-4-scout-17b-16e-instruct"
+GROQ_CHAT_MODEL  = "meta-llama/llama-4-scout-17b-16e-instruct"
+GROQ_MINI_MODEL  = "meta-llama/llama-4-scout-17b-16e-instruct"
 # HuggingFace BART — used as silent fallback for map phase.
 HF_SUMMARY_MODEL = "facebook/bart-large-cnn"
 
@@ -62,7 +71,7 @@ def _groq_client() -> Groq:
             "GROQ_API_KEY is not set. Get a free key at https://console.groq.com/keys "
             "and add GROQ_API_KEY=gsk_... to your .env file."
         )
-    return Groq(api_key=settings.groq_api_key, timeout=20.0, max_retries=0)
+    return Groq(api_key=settings.groq_api_key, timeout=60.0, max_retries=2)
 
 
 def _hf_client() -> InferenceClient:
@@ -72,7 +81,7 @@ def _hf_client() -> InferenceClient:
             "HF_API_KEY is not set. Get a free key at https://huggingface.co/settings/tokens "
             "and add HF_API_KEY=hf_... to your .env file."
         )
-    return InferenceClient(token=settings.hf_api_key, timeout=20.0)
+    return InferenceClient(token=settings.hf_api_key, timeout=60.0)
 
 
 # ─── Q&A / Chat (Groq → Llama 3.1) ──────────────────────────────────────────
@@ -114,7 +123,7 @@ def generate_answer(
             f"6. **NO EMOJIS**. Markdown only."
         )
         user_content = (
-            f"DOCUMENT CONTEXT:\n{context[:5000]}\n\n"
+            f"DOCUMENT CONTEXT:\n{context[:20000]}\n\n"
             f"QUESTION: {question}"
         )
     else:
@@ -129,13 +138,26 @@ def generate_answer(
         messages.extend(history[-10:])
     messages.append({"role": "user", "content": user_content})
 
-    response = client.chat.completions.create(
-        model=GROQ_CHAT_MODEL,
-        messages=messages,
-        max_tokens=2048,
-        temperature=0.3,
-    )
-    return response.choices[0].message.content.strip()
+    # Try every model in rotation — each has its own daily limit
+    for model in GROQ_MODELS:
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                max_tokens=2048,
+                temperature=0.3,
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            err_str = str(e)
+            if "400" in err_str and "decommissioned" in err_str:
+                continue  # Skip decommissioned models silently
+            if "429" in err_str or "413" in err_str:
+                print(f"[Chat] {model} rate-limited, trying next...")
+                continue
+            raise  # Unexpected error — surface it
+
+    return "All AI models are temporarily unavailable. Please try again in a few minutes."
 
 
 # ─── Summarization ────────────────────────────────────────────────────────────
@@ -145,22 +167,27 @@ def summarize(
     mode: str = "short",
     language: str = "English",
 ) -> str:
-    """
-    Summarize a document using a paragraph-aware Map-Reduce pipeline.
-    Always runs map-reduce so raw document text never reaches the reduce model.
-    """
-    # Tiny documents only: summarize the raw text directly (no sections to map)
-    if len(text) <= 2000:
-        return _groq_summarize(text, mode, language)
+    """Synchronous wrapper for the new streaming summarizer."""
+    return "".join(list(summarize_stream(text, mode, language)))
 
-    # Split on paragraph boundaries to preserve section integrity
+
+def summarize_stream(
+    text: str,
+    mode: str = "short",
+    language: str = "English",
+):
+    """
+    Generator that yields summary parts. 
+    Uses a strict token-budget refill strategy to avoid Groq Free Tier limits.
+    """
+    # Better splitting: try double newline, then single newline, then sentences.
     paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    if len(paragraphs) < 5:
+        paragraphs = [p.strip() for p in text.split("\n") if p.strip()]
 
     # --- MAP PHASE ---
-    # Maximize coverage per call: 15,000 chars ≈ 3,750 tokens.
-    # Total per call (3.7k input + 0.4k output) = 4.1k tokens. Safe for 6k TPM.
-    num_target_chunks = 40
-    chunk_size_chars = min(15000, max(3000, len(text) // num_target_chunks))
+    # 3,500 chars ≈ 875 tokens input. With 8B 6k TPM, this is very safe.
+    chunk_size_chars = 3500
     
     chunks: list[str] = []
     current: list[str] = []
@@ -174,8 +201,8 @@ def summarize(
     if current:
         chunks.append("\n\n".join(current))
 
-    # Safety cap: 100 chunks covers up to 1.5 million characters (~400,000 words).
-    chunks = chunks[:100]
+    # Cap at 80 chunks max (~280k chars) to protect the 70B daily quota.
+    chunks = chunks[:80]
 
     intermediate_summaries: list[str] = []
     use_hf_only = False # Flag to switch to HF if Groq hits rate limits
@@ -184,20 +211,26 @@ def summarize(
         try:
             s = ""
             if not use_hf_only:
-                # Delay to avoid hitting Groq's burst TPM limit
-                if idx > 0: time.sleep(1.8)
+                # AGGRESSIVE FALLBACK: Try every model in rotation for this specific chunk
+                for model_idx in range(len(GROQ_MODELS)):
+                    current_model = GROQ_MODELS[(idx + model_idx) % len(GROQ_MODELS)]
+                    
+                    if idx > 0: time.sleep(5)
+                    
+                    try:
+                        s = _groq_mini_summary(chunk, language, mode, model=current_model)
+                        if s: break # Found a model that works for this chunk
+                    except Exception as e:
+                        if "413" in str(e) or "429" in str(e):
+                            print(f"[AI] {current_model} rate limited, trying next...")
+                            continue 
+                        else: raise e
                 
-                try:
-                    s = _groq_mini_summary(chunk, language)
-                except Exception as e:
-                    if "413" in str(e) or "429" in str(e):
-                        print(f"[AI] Groq TPM hit, switching to HF for remaining chunks.")
-                        use_hf_only = True
-                    else:
-                        raise e
+                if not s:
+                    print(f"[AI] All models rate-limited for chunk {idx}. Using HF fallback.")
+                    use_hf_only = True
             
             if not s:
-                # Fallback to HF BART (no 6k TPM limit)
                 s = _hf_fast_summary(chunk[:4000])
                 
             if s:
@@ -205,15 +238,18 @@ def summarize(
         except Exception as e:
             print(f"[AI] Chunk {idx} map failed: {e}")
 
-    # --- REDUCE PHASE ---
+    # --- FINAL PHASE: One unified synthesis call for ALL modes ---
+    # This produces a single, cohesive, non-truncated response.
     if not intermediate_summaries:
-        combined = text[:5000]  # last resort
-    else:
-        combined = "\n".join(intermediate_summaries)
+        yield "The document could not be summarized. Please check your API keys and connectivity."
+        return
 
-    # detailed/study_notes get a larger budget to cover all sections
-    combined_limit = 9000 if mode in ("detailed", "study_notes") else 4000
-    return _groq_summarize(combined[:combined_limit], mode, language)
+    # Join all section highlights into one big context.
+    combined = "\n\n".join(intermediate_summaries)
+    
+    # Use the final synthesis function (tries all models in rotation)
+    final_summary = _groq_summarize(combined[:32000], mode, language)
+    yield final_summary
 
 
 def _hf_fast_summary(text: str) -> str:
@@ -234,42 +270,59 @@ def _hf_fast_summary(text: str) -> str:
             return result.get("summary_text", "")
         return str(result)
     except Exception as e:
-        print(f"[HF] Task failed: {e}")
+        err_msg = str(e).lower()
+        if "getaddrinfo" in err_msg or "connection" in err_msg:
+            print(f"[HF] Network Error: Cannot reach HuggingFace. Check your internet/proxy settings.")
+        else:
+            print(f"[HF] Task failed: {e}")
     return ""
 
 
-def _groq_mini_summary(text: str, language: str) -> str:
+def _groq_mini_summary(text: str, language: str, mode: str = "short", model: str = GROQ_MINI_MODEL) -> str:
     """
-    Map-phase: extract ONLY heading names + a max-10-word description.
+    Map-phase: extract key-points from each document chunk.
+    Outputs are compact so that ALL sections fit in the final synthesis call.
     """
     try:
-        # Final safety check: if chunk is somehow huge, truncate to 18k chars (~4.5k tokens)
-        safe_text = text[:18000]
-        
+        # Strict safety check: 12k chars ≈ 3k tokens input. Safe under 6k TPM.
+        safe_text = text[:12000]
+
+        # MAP PHASE prompt: compact key-point extraction for all modes.
+        if mode in ("detailed", "study_notes"):
+            system_msg = (
+                f"You are an expert indexer. For each heading/section in the text, extract:\n"
+                f"- The section name\n"
+                f"- 3-5 compact technical bullet points covering key concepts, commands, and facts\n"
+                f"Be dense and precise. Use **bold** for terms. Respond in {language}."
+            )
+            m_tokens = 700
+        else:
+            # Map phase for overview modes: extract a 'Table of Contents' with brief summaries
+            system_msg = (
+                f"You are an indexer. Extract the main topics and 1-sentence summary for each "
+                f"from this document section. Respond in {language}."
+            )
+            m_tokens = 500
+
         client = _groq_client()
         response = client.chat.completions.create(
-            model=GROQ_MINI_MODEL,
+            model=model,
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        f"You are an index extractor. "
-                        f"For every chapter or section heading you find in the text, "
-                        f"output exactly ONE line in this format: "
-                        f"'[Heading name]: [max 8 words describing the topic]' "
-                        f"Example: '1.3 What is a Container?: Defines lightweight isolated runtime environments.' "
-                        f"Rules: output ONLY these one-line entries. No paragraphs. No extra text. "
-                        f"Do NOT copy sentences from the document. Respond in {language}."
-                    )
-                },
+                {"role": "system", "content": system_msg},
                 {"role": "user", "content": safe_text}
             ],
-            max_tokens=400,
+            max_tokens=m_tokens,
             temperature=0.0,
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        print(f"[Mini] {e}")
+        err_msg = str(e).lower()
+        if "getaddrinfo" in err_msg or "connection" in err_msg:
+            print(f"[Mini] Network Error: Cannot reach Groq. Check your internet/proxy settings.")
+        elif "timeout" in err_msg:
+            print(f"[Mini] Request timed out.")
+        else:
+            print(f"[Mini] Error: {e}")
         return ""
 
 
@@ -283,41 +336,41 @@ def _groq_summarize(text: str, mode: str, language: str) -> str:
     mode_instructions = {
         "short": "Write a concise 2-3 paragraph summary of the document's main purpose, key topics, and conclusions.",
         "detailed": (
-            "Create a structured chapter-by-chapter overview of the document. "
+            "Create a comprehensive, professional chapter-by-chapter overview of the document. "
+            "For every single chapter and section in the index, provide a thorough summary. "
             "Format EXACTLY like this:\n"
             "## 1. Chapter Title\n"
-            "- Brief overview of this chapter (1 sentence).\n"
+            "- **Overview**: A detailed 2-3 sentence technical summary of this chapter.\n"
             "\n"
             "### 1.1 Sub-section Title\n"
-            "- What this sub-section covers (1-2 bullet points, concise).\n"
-            "\n"
-            "## 2. Next Chapter\n"
-            "- Brief overview.\n"
+            "- **Key Concept**: Explain the primary idea or feature here (2-3 sentences).\n"
+            "- **Technical Detail**: Include specific commands, parameters, or technical steps mentioned.\n"
+            "- **Example/Context**: Provide any practical examples given in the text.\n"
             "\n"
             "STRICT RULES:\n"
-            "- Cover EVERY chapter and sub-section in order. Do NOT skip any.\n"
-            "- Use bullet points ONLY — no long paragraphs.\n"
-            "- Keep each bullet concise (max 20 words).\n"
-            "- Complete the ENTIRE document. Do not stop early."
+            "- Cover EVERY section in the index. Do NOT skip or consolidate any headings.\n"
+            "- Use bullet points for descriptions. Be technical and precise.\n"
+            "- Complete the full portion of the document assigned to you."
         ),
         "bullet": "Summarize into grouped bullet points. Use **bold** for key terms and ### headers for each major topic.",
         "executive": "Write a professional executive summary: a 1-paragraph overview, bold bullet points for key findings, and a Conclusion.",
         "study_notes": (
-            "Create structured study notes covering the ENTIRE document. "
+            "Transform the document into expert-level study notes for a student. "
+            "Structure it logically by chapter. "
             "Format EXACTLY like this:\n"
             "## Topic / Chapter Name\n"
-            "- **Key concept**: 1-sentence explanation.\n"
-            "- **Another concept**: 1-sentence explanation.\n"
+            "- **Concept Name**: Thorough technical explanation of this concept.\n"
+            "- **Important Syntax/Command**: ```bash\ncommand here\n```\n"
+            "- **Crucial Fact**: Why this matters or how it works internally.\n"
             "\n"
             "### Sub-topic Name\n"
-            "- **Term**: definition or explanation (concise).\n"
+            "- **Term**: Detailed definition including context and usage.\n"
+            "- **Step-by-Step**: List any procedures or workflows in order.\n"
             "\n"
             "STRICT RULES:\n"
-            "- Cover EVERY chapter and sub-section in order. Do NOT skip any.\n"
-            "- Use **bold** for all key terms and definitions.\n"
-            "- Bullet points only — no long paragraphs.\n"
-            "- Include commands/code in ```code``` blocks where relevant.\n"
-            "- Complete the ENTIRE document. Do not stop early."
+            "- Exhaustive coverage: Include every key term and technical detail.\n"
+            "- Formatting: Use **bold** for terms and ```blocks``` for all code/commands.\n"
+            "- Complete the full portion of the document assigned to you."
         ),
     }
     instruction = mode_instructions.get(mode, "Summarize the following document.")
@@ -339,56 +392,13 @@ STRICT ARCHITECTURAL RULES:
 
 Respond in {language}. Use Markdown. No emojis."""
 
-    # Calculate approximate tokens to respect Groq's 6000 TPM limit
-    # input_chars // 4 is a safe heuristic for tokens
-    input_tokens = len(text) // 4
-    
-    # If the input itself is too large for the 6k limit, truncate it
-    if input_tokens > 4500:
-        text = text[:18000] # Cap input at ~4500 tokens
-        input_tokens = len(text) // 4
-
-    # max_tokens + input_tokens must be < 6000
-    safe_max_tok = min(max_tok, 5800 - input_tokens)
-    if safe_max_tok < 500:
-        safe_max_tok = 500 # minimum viable response
-    
-    # Split-Synthesis for long detailed summaries to bypass 6k TPM limit
-    # If the index is large and we need a detailed output, do it in two passes
-    if mode in ("detailed", "study_notes") and input_tokens > 2000:
-        lines = text.split("\n")
-        mid = len(lines) // 2
-        part1 = "\n".join(lines[:mid])
-        part2 = "\n".join(lines[mid:])
-        
-        results = []
-        for i, part in enumerate([part1, part2]):
-            # Recalculate tokens for this part
-            p_tokens = len(part) // 4
-            p_max = min(3000, 5800 - p_tokens)
-            
-            try:
-                # Add a small delay between parts to reset TPM window if needed
-                if i > 0: time.sleep(2)
-                
-                res = client.chat.completions.create(
-                    model=GROQ_SUM_MODEL,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user",   "content": f"Document content (Part {i+1}):\n\n{part}"},
-                    ],
-                    max_tokens=int(p_max),
-                    temperature=0.0,
-                )
-                results.append(res.choices[0].message.content.strip())
-            except Exception as e:
-                print(f"[SplitSum] Part {i+1} failed: {e}")
-        
-        if results:
-            return "\n\n".join(results)
-            
-    # Default single-pass synthesis
+    # Single-pass synthesis for distillation modes (short/bullet/etc)
+    # The input text (index) is now small enough to handle without splitting.
     try:
+        input_tokens = len(text) // 4
+        safe_max_tok = min(max_tok, 5800 - input_tokens)
+        if safe_max_tok < 500: safe_max_tok = 500
+
         response = client.chat.completions.create(
             model=GROQ_SUM_MODEL,
             messages=[
@@ -402,8 +412,42 @@ Respond in {language}. Use Markdown. No emojis."""
     except Exception as e:
         print(f"[Sum] {GROQ_SUM_MODEL} failed ({e}), falling back to {GROQ_CHAT_MODEL}")
         
-        # Recalculate for fallback model which might have different limits (usually same 6k)
-        text_fallback = text[:6000] # Much smaller context for fallback
+        text_fallback = text[:8000]
+        input_tokens_fb = len(text_fallback) // 4
+        safe_max_fb = min(max_tok_fallback, 5800 - input_tokens_fb)
+        
+        response = client.chat.completions.create(
+            model=GROQ_CHAT_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": f"Document content:\n\n{text_fallback}"},
+            ],
+            max_tokens=int(safe_max_fb),
+            temperature=0.0,
+        )
+        return response.choices[0].message.content.strip()
+            
+    # Default single-pass synthesis for shorter indexes
+    try:
+        # Budgeting for single pass
+        input_tokens = len(text) // 4
+        safe_max_tok = min(max_tok, 5800 - input_tokens)
+        if safe_max_tok < 500: safe_max_tok = 500
+
+        response = client.chat.completions.create(
+            model=GROQ_SUM_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": f"Document content:\n\n{text}"},
+            ],
+            max_tokens=int(safe_max_tok),
+            temperature=0.0,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"[Sum] {GROQ_SUM_MODEL} failed ({e}), falling back to {GROQ_CHAT_MODEL}")
+        
+        text_fallback = text[:8000]
         input_tokens_fb = len(text_fallback) // 4
         safe_max_fb = min(max_tok_fallback, 5800 - input_tokens_fb)
         

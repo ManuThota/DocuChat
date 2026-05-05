@@ -8,7 +8,8 @@ backend/routers/chat.py — Chat session and messaging endpoints.
   DELETE /chat/{chat_id}   — Delete a chat and its messages
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -68,6 +69,7 @@ async def new_chat(
 @router.post("/message")
 async def send_message(
     body:         SendMessageRequest,
+    background_tasks: BackgroundTasks,
     current_user: User            = Depends(get_current_user),
     db:           AsyncSession    = Depends(get_db),
 ):
@@ -118,7 +120,30 @@ async def send_message(
     # ─── AI generation ────────────────────────────────────────────────────────
     try:
         if body.summary_mode and index_path:
-            ai_text = summarize_document(index_path, mode=body.summary_mode, language=body.language)
+            # BACKGROUND TASK for long summaries
+            from backend.services.rag_pipeline import process_summary_background
+            
+            # 1. Create placeholder message
+            placeholder = "[SYNTHESIZING]"
+            asst_msg = Message(chat_id=chat.id, role="assistant", content=placeholder)
+            db.add(asst_msg)
+            await db.commit()
+            await db.refresh(asst_msg)
+            
+            # 2. Launch background task
+            background_tasks.add_task(
+                process_summary_background,
+                message_id=asst_msg.id,
+                index_path=index_path,
+                mode=body.summary_mode,
+                language=body.language
+            )
+            
+            return {
+                "user_message":      {"role": "user",      "content": body.content},
+                "assistant_message": {"role": "assistant",  "content": placeholder, "id": asst_msg.id},
+            }
+
         elif index_path:
             ai_text = answer_question(body.content, index_path, language=body.language, history=history)
         else:

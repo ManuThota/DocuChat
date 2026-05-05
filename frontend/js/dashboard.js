@@ -598,7 +598,26 @@ async function sendMessage() {
   try {
     const resp = await ChatAPI.sendMessage(activeChatId, content, fileId, language, summaryMode);
     typingEl.remove();
-    appendMessage(chatInner, 'assistant', resp.assistant_message.content);
+
+    const assistantContent = resp.assistant_message.content;
+    const msgId = resp.assistant_message.id;
+
+    if (assistantContent === '[SYNTHESIZING]') {
+      // Background task - show spinner and immediately unlock the UI
+      appendMessage(chatInner, 'assistant', assistantContent, msgId);
+      pollSummary(activeChatId, msgId);
+      
+      // Reset the summary dropdown so next message is a normal chat
+      const selEl = document.getElementById('summaryModeSelect');
+      if (selEl) selEl.value = '';
+
+      // Release the UI immediately — user can send more messages while summary processes
+      isTyping = false;
+      sendBtn.disabled = false;
+    } else {
+      appendMessage(chatInner, 'assistant', assistantContent);
+    }
+
     await sidebar.refresh();
     sidebar.setActive(activeChatId);
     try {
@@ -786,6 +805,47 @@ if (menuChatsToggle && chatsSubmenu) {
     if (arrow) arrow.classList.toggle('rotated', isHidden);
   });
 }
+
+// ─── Polling for long summaries ──────────────────────────────────────────
+async function pollSummary(chatId, messageId) {
+  const MAX_POLLS = 240; // Stop after 20 minutes (240 × 5s)
+  let pollCount = 0;
+
+  const pollInterval = setInterval(async () => {
+    pollCount++;
+    if (pollCount > MAX_POLLS || activeChatId !== chatId) {
+      clearInterval(pollInterval);
+      return;
+    }
+
+    try {
+      const data = await ChatAPI.getChat(chatId);
+      const msg = data.messages.find(m => m.id === messageId);
+      
+      if (msg && msg.content !== '[SYNTHESIZING]') {
+        clearInterval(pollInterval);
+        
+        // Find this specific message bubble by its data-message-id tag
+        const targetEl = document.querySelector(`[data-message-id="${messageId}"]`);
+        if (targetEl) {
+          const bubble = targetEl.querySelector('.msg-bubble');
+          if (bubble) {
+            bubble.innerHTML = marked.parse(msg.content);
+            bubble.querySelectorAll('pre').forEach(block => {
+              block.style.position = 'relative';
+            });
+            targetEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+          }
+        }
+        
+        showToast('Summary ready!', 'success');
+      }
+    } catch (err) {
+      console.error('Polling failed:', err);
+    }
+  }, 5000);
+}
+
 
 // ─── Reset chat view ──────────────────────────────────────────────────────
 function resetChatView() {
