@@ -112,6 +112,29 @@ export const ChatAPI = {
       body: JSON.stringify({ chat_id, content, file_id, language, summary_mode }),
     }),
 
+  sendMessageStream: async (chat_id, content, file_id = null, language = "English", onToken) => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    const response = await fetch(`${BASE_URL}/chat/message/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ chat_id, content, file_id, language }),
+    });
+
+    if (!response.ok) throw new Error(`Streaming failed: ${response.statusText}`);
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      if (onToken) onToken(chunk);
+    }
+  },
+
   getHistory: () => apiFetch('/chat/history'),
   getChat:    (id) => apiFetch(`/chat/${id}`),
   updateChat: (id, updates) => apiFetch(`/chat/${id}`, { method: 'PATCH', body: JSON.stringify(updates) }),

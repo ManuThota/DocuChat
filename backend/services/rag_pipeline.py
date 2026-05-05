@@ -25,7 +25,7 @@ import faiss
 from huggingface_hub import InferenceClient
 
 from backend.utils.chunker import chunk_text
-from backend.services.ai_engine import generate_answer, summarize, summarize_stream
+from backend.services.ai_engine import generate_answer, generate_answer_stream, summarize, summarize_stream
 from backend.config import get_settings
 
 settings = get_settings()
@@ -170,11 +170,12 @@ def answer_question(
     history: list[dict] | None = None,
 ) -> str:
     """Full RAG pipeline: embed query → retrieve chunks → generate answer."""
-    # Simple greeting detection: don't use context for social greetings
-    greetings = ["hello", "hi", "hey", "hola", "greetings", "how are you", "good morning", "good afternoon", "good evening"]
-    clean_q = question.lower().strip()
+    # Robust greeting detection
+    greetings = ["hello", "hi", "hey", "hola", "greetings", "how are you", "good morning", "good afternoon", "good evening", "what's up", "sup", "howdy"]
+    clean_q = question.lower().strip().replace("?", "").replace("!", "")
     
-    is_social = any(greet in clean_q for greet in greetings) or len(clean_q) < 3
+    # Check if the query is a simple greeting or very short
+    is_social = any(clean_q == g or clean_q.startswith(g + " ") for g in greetings) or len(clean_q) < 3
     
     if is_social:
         return generate_answer(question, context="", language=language, history=history)
@@ -182,6 +183,27 @@ def answer_question(
     chunks  = retrieve_relevant_chunks(question, index_path, top_k=8)
     context = "\n\n".join(chunks) if chunks else ""
     return generate_answer(question, context, language=language, history=history)
+
+
+def answer_question_stream(
+    question: str,
+    index_path: str,
+    language: str = "English",
+    history: list[dict] | None = None,
+):
+    """Full RAG pipeline (streaming version)."""
+    # Robust greeting detection
+    greetings = ["hello", "hi", "hey", "hola", "greetings", "how are you", "good morning", "good afternoon", "good evening", "what's up", "sup", "howdy"]
+    clean_q = question.lower().strip().replace("?", "").replace("!", "")
+    is_social = any(clean_q == g or clean_q.startswith(g + " ") for g in greetings) or len(clean_q) < 3
+    
+    if is_social:
+        yield from generate_answer_stream(question, context="", language=language, history=history)
+        return
+
+    chunks  = retrieve_relevant_chunks(question, index_path, top_k=8)
+    context = "\n\n".join(chunks) if chunks else ""
+    yield from generate_answer_stream(question, context, language=language, history=history)
 
 
 def summarize_document(

@@ -44,6 +44,20 @@ function showToast(msg, type = 'info') {
   }, 3500);
 }
 
+function scrollToBottom() {
+  const chatWindow = document.getElementById('chatWindow');
+  if (!chatWindow) return;
+  
+  // Multi-stage scroll to account for dynamic content rendering (marked, mathjax, etc)
+  const performScroll = () => {
+    chatWindow.scrollTo({ top: chatWindow.scrollHeight, behavior: 'smooth' });
+  };
+
+  performScroll();
+  setTimeout(performScroll, 50);
+  setTimeout(performScroll, 150);
+}
+
 // ─── User Profile Logic ──────────────────────────────────────────────────
 const userBlock      = document.getElementById('userBlock');
 const userMenuPopup  = document.getElementById('userMenuPopup');
@@ -496,12 +510,23 @@ const uploader = initUpload({
     await sidebar.refresh();
   }
 });
-uploader.restore();
+// uploader.restore() is no longer needed here as loadChat handles it per-chat
 
 // ─── Load a chat (open from sidebar) ──────────────────────────────────────
+const chatDrafts = {};
+
 async function loadChat(chatId, title) {
+  // Save current draft before switching
+  if (activeChatId) {
+    chatDrafts[activeChatId] = msgInput.value;
+  }
+
   activeChatId = chatId;
   chatTitle.textContent = title || 'Chat';
+  
+  // Restore draft for new chat
+  msgInput.value = chatDrafts[chatId] || '';
+  autoResize(msgInput);
   
   // Persist for reload
   localStorage.setItem('activeChatId', chatId);
@@ -520,14 +545,26 @@ async function loadChat(chatId, title) {
     if (data.messages.length === 0) {
       welcomeScreen.style.display = 'flex';
     }
+    scrollToBottom();
   } catch (err) {
     showToast('Failed to load chat.', 'error');
     resetChatView();
   }
 
   // Load documents for this specific chat
-  uploader.deselect();
+  const lastFileId = localStorage.getItem(`activeFile_${chatId}`);
   await uploader.loadFilesForChat(chatId);
+  
+  if (lastFileId) {
+    // Attempt to re-select the last active file for this chat
+    // We search the DOM again because loadFilesForChat just re-rendered it
+    const card = document.querySelector(`.doc-card[data-id="${lastFileId}"]`);
+    if (card) {
+      card.click();
+    }
+  } else {
+    uploader.deselect();
+  }
 }
 
 // ─── New Chat button ──────────────────────────────────────────────────────
@@ -557,67 +594,109 @@ async function sendMessage() {
   const content = msgInput.value.trim();
   if (!content || isTyping) return;
 
+  // 1. Initial State & UI Feedback
+  isTyping = true;
+  sendBtn.disabled = true;
+  msgInput.value = ''; // Clear immediately to prevent double-submit
+  if (activeChatId) delete chatDrafts[activeChatId];
+  autoResize(msgInput);
+
+  // 2. Chat Persistence (Create if new)
   if (!activeChatId) {
     try {
       const chat = await ChatAPI.newChat();
       activeChatId = chat.id;
-      exportBtn.style.display = 'flex';
+      if (exportBtn) exportBtn.style.display = 'flex';
       welcomeScreen.style.display = 'none';
+      if (window.sidebar) {
+        sidebar.setActive(activeChatId);
+        await sidebar.refresh();
+      }
     } catch (err) {
       showToast('Failed to create chat.', 'error');
+      msgInput.value = content; 
+      isTyping = false;
+      sendBtn.disabled = false;
       return;
     }
   }
 
   const language = document.getElementById('languageSelect').value;
-  
-  // Only use summary mode if the content exactly matches a summary trigger phrase.
-  // This prevents regular questions from being treated as summary requests.
+  const fileId = uploader.getActiveFileId();
+
+  // 3. Summary Mode Detection
   const summaryPrompts = {
     detailed: "Give the detailed summary of the document",
     short: "Provide a short summary of the document",
     bullet: "Summarize this document in bullet points",
     executive: "Generate an executive summary of this document",
-    study_notes: "Create detailed study notes from this document"
+    study_notes: "Create detailed study notes from this document",
+    key_insights: "What are the main conclusions?",
+    action_items: "Give me action items from this document",
+    explain_simply: "Explain this document in simple terms"
   };
   const summaryModeSelect = document.getElementById('summaryModeSelect');
   const currentMode = summaryModeSelect ? summaryModeSelect.value : null;
-  const summaryMode = (currentMode && content === summaryPrompts[currentMode]) ? currentMode : null;
+  let summaryMode = (currentMode && content === summaryPrompts[currentMode]) ? currentMode : null;
   
-  const fileId = uploader.getActiveFileId();
+  if (!summaryMode) {
+    for (const [mode, prompt] of Object.entries(summaryPrompts)) {
+      if (content === prompt) { summaryMode = mode; break; }
+    }
+  }
 
+  // 4. UI Preparation
   welcomeScreen.style.display = 'none';
   appendMessage(chatInner, 'user', content);
-  msgInput.value = '';
-  autoResize(msgInput);
-  sendBtn.disabled = true;
-  isTyping = true;
+  scrollToBottom();
 
   const typingEl = showTypingIndicator(chatInner);
 
   try {
-    const resp = await ChatAPI.sendMessage(activeChatId, content, fileId, language, summaryMode);
-    typingEl.remove();
-
-    const assistantContent = resp.assistant_message.content;
-    const msgId = resp.assistant_message.id;
-
-    if (assistantContent === '[SYNTHESIZING]') {
-      // Background task - show spinner and immediately unlock the UI
-      appendMessage(chatInner, 'assistant', assistantContent, msgId);
-      pollSummary(activeChatId, msgId);
+    if (summaryMode) {
+      // Use non-streaming API for Map-Reduce tasks (background processing)
+      const resp = await ChatAPI.sendMessage(activeChatId, content, fileId, language, summaryMode);
+      if (typingEl) typingEl.remove();
       
-      // Reset the summary dropdown so next message is a normal chat
-      const selEl = document.getElementById('summaryModeSelect');
-      if (selEl) selEl.value = '';
+      const assistantContent = resp.assistant_message.content;
+      const msgId = resp.assistant_message.id;
 
-      // Release the UI immediately — user can send more messages while summary processes
-      isTyping = false;
-      sendBtn.disabled = false;
+      if (assistantContent === '[SYNTHESIZING]') {
+        appendMessage(chatInner, 'assistant', assistantContent, msgId);
+        pollSummary(activeChatId, msgId);
+      } else {
+        appendMessage(chatInner, 'assistant', assistantContent, msgId);
+      }
     } else {
-      appendMessage(chatInner, 'assistant', assistantContent);
+      // Use streaming API for regular chat
+      if (typingEl) typingEl.remove();
+      const messageEl = appendMessage(chatInner, 'assistant', '', null);
+      const bubble = messageEl.querySelector('.msg-bubble');
+      let fullText = "";
+
+      try {
+        if (fileId) {
+          // Add a "Thinking..." indicator for RAG queries
+          bubble.innerHTML = '<span class="thinking-dots">Thinking<span>.</span><span>.</span><span>.</span></span>';
+        }
+
+        await ChatAPI.sendMessageStream(activeChatId, content, fileId, language, (token) => {
+          // Remove indicator on first token
+          if (fullText === "" && fileId) bubble.innerHTML = "";
+          
+          fullText += token;
+          bubble.innerHTML = marked.parse(fullText);
+          bubble.querySelectorAll('pre').forEach(block => {
+             block.style.position = 'relative';
+          });
+          scrollToBottom();
+        });
+      } catch (err) {
+        bubble.innerHTML = `*Error during streaming: ${err.message}*`;
+      }
     }
 
+    // After completion, update UI state
     await sidebar.refresh();
     sidebar.setActive(activeChatId);
     try {
@@ -625,11 +704,12 @@ async function sendMessage() {
       chatTitle.textContent = chatData.title;
     } catch (e) {}
   } catch (err) {
-    typingEl.remove();
-    appendMessage(chatInner, 'assistant', `Error: ${err.message}`);
+    if (typingEl) typingEl.remove();
+    showToast(err.message || 'Failed to send message.', 'error');
   } finally {
     isTyping = false;
     sendBtn.disabled = false;
+    scrollToBottom();
   }
 }
 
@@ -641,6 +721,10 @@ if (sendBtn) {
   msgInput.addEventListener('input', () => {
     autoResize(msgInput);
     sendBtn.disabled = !msgInput.value.trim();
+    // Save draft
+    if (activeChatId) {
+      chatDrafts[activeChatId] = msgInput.value;
+    }
   });
 }
 
@@ -650,6 +734,11 @@ document.querySelectorAll('.suggestion-card').forEach(card => {
     msgInput.value = card.dataset.prompt;
     msgInput.dispatchEvent(new Event('input'));
     msgInput.focus();
+    
+    // Auto-send if a document is selected
+    if (uploader.getActiveFileId()) {
+      sendMessage();
+    }
   });
 });
 

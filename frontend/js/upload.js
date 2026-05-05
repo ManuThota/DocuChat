@@ -189,17 +189,6 @@ export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, ac
     }
   }
 
-  function restore() {
-    const savedId = localStorage.getItem('docuchat_active_file_id');
-    const savedName = localStorage.getItem('docuchat_active_file_name');
-    if (savedId && savedName) {
-      activeFileId = parseInt(savedId);
-      activeDocName.textContent = savedName;
-      activeDocBadge.style.display = 'flex';
-      return activeFileId;
-    }
-    return null;
-  }
 
 
   // ─── Load files for a specific chat ──────────────────────────────────────
@@ -224,7 +213,7 @@ export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, ac
   // ─── Render document cards ────────────────────────────────────────────────
   function renderDocCards(files, chatId) {
     filesPanel.innerHTML = `<div class="doc-cards-grid">${files.map(f => `
-      <div class="doc-card ${f.id === activeFileId ? 'selected' : ''}"
+      <div class="doc-card ${f.id == activeFileId ? 'selected' : ''}"
            data-id="${f.id}" data-name="${escHtml(f.original_name)}" data-chat="${chatId || ''}">
         <button class="doc-card-delete" data-id="${f.id}" data-name="${escHtml(f.original_name)}" title="Delete document">
           <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none"
@@ -245,19 +234,23 @@ export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, ac
         const id   = parseInt(card.dataset.id, 10);
         const name = card.dataset.name;
 
-        if (activeFileId === id) {
+        const cards = filesPanel.querySelectorAll('.doc-card');
+        const chatId = getActiveChatId();
+        
+        if (activeFileId == id) {
           // Deselect
           activeFileId = null;
           activeDocBadge.style.display = 'none';
+          if (chatId) localStorage.removeItem(`activeFile_${chatId}`);
+          cards.forEach(c => c.classList.remove('selected'));
         } else {
           activeFileId = id;
           activeDocName.textContent = name;
           activeDocBadge.style.display = 'flex';
+          if (chatId) localStorage.setItem(`activeFile_${chatId}`, id);
+          cards.forEach(c => c.classList.remove('selected'));
+          card.classList.add('selected');
         }
-
-        filesPanel.querySelectorAll('.doc-card').forEach(c => c.classList.remove('selected'));
-        if (activeFileId === id) card.classList.add('selected');
-        else card.classList.remove('selected');
       });
     });
 
@@ -273,13 +266,13 @@ export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, ac
   function deselect() {
     activeFileId = null;
     activeDocBadge.style.display = 'none';
+    filesPanel.querySelectorAll('.doc-card').forEach(c => c.classList.remove('selected'));
   }
 
   return {
     getActiveFileId: () => activeFileId,
-    loadFilesForChat,
     deselect,
-    restore,
+    loadFilesForChat,
   };
 }
 

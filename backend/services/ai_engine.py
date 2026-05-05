@@ -108,7 +108,8 @@ def generate_answer(
 
     if context.strip():
         system_content = (
-            f"You are an expert document assistant. Answer in {language}.\n"
+            f"You are an expert document assistant. \n"
+            f"STRICT REQUIREMENT: You MUST respond ONLY in {language}. This is non-negotiable.\n"
             f"RULES:\n"
             f"1. **DEPTH FIRST**: For any specific topic, give an exhaustive, in-depth answer. "
             f"Cover every detail, sub-point, step, command, and example present in the document about that topic. "
@@ -128,7 +129,8 @@ def generate_answer(
         )
     else:
         system_content = (
-            f"You are a helpful AI assistant. Answer clearly and concisely in {language}. "
+            f"You are a helpful AI assistant. \n"
+            f"STRICT REQUIREMENT: You MUST respond ONLY in {language}. This is non-negotiable.\n"
             f"Do not use emojis. Use Markdown formatting."
         )
         user_content = question
@@ -156,6 +158,67 @@ def generate_answer(
                 print(f"[Chat] {model} rate-limited, trying next...")
                 continue
             raise  # Unexpected error — surface it
+
+
+def generate_answer_stream(
+    question: str,
+    context: str,
+    language: str = "English",
+    history: list[dict] | None = None,
+):
+    """
+    Generator that yields tokens in real-time.
+    """
+    client = _groq_client()
+
+    if context.strip():
+        system_content = (
+            f"You are an expert document assistant. \n"
+            f"STRICT REQUIREMENT: You MUST respond ONLY in {language}. This is non-negotiable.\n"
+            f"RULES:\n"
+            f"1. **DEPTH FIRST**: exhaustive, in-depth answer.\n"
+            f"2. **GROUNDED**: Base answers on DOCUMENT CONTEXT.\n"
+            f"3. **FORMATTING**: Use Markdown (bold, headers, code blocks).\n"
+            f"4. **DIRECT**: No preambles.\n"
+            f"5. **NO EMOJIS**."
+        )
+        user_content = f"DOCUMENT CONTEXT:\n{context[:20000]}\n\nQUESTION: {question}"
+    else:
+        system_content = (
+            f"You are a helpful AI assistant. \n"
+            f"STRICT REQUIREMENT: You MUST respond ONLY in {language}. This is non-negotiable.\n"
+            f"Do not use emojis. Use Markdown formatting."
+        )
+        user_content = question
+
+    messages = [{"role": "system", "content": system_content}]
+    if history:
+        messages.extend(history[-10:])
+    messages.append({"role": "user", "content": user_content})
+
+    for model in GROQ_MODELS:
+        try:
+            stream = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                max_tokens=2048,
+                temperature=0.3,
+                stream=True,
+            )
+            for chunk in stream:
+                content = chunk.choices[0].delta.content
+                if content:
+                    yield content
+            return # Success
+        except Exception as e:
+            err_str = str(e)
+            if "429" in err_str or "413" in err_str:
+                print(f"[Chat] {model} rate-limited (stream), trying next...")
+                continue
+            print(f"[Chat] Stream error on {model}: {e}")
+            break
+    
+    yield "[Error: All AI models are currently unavailable. Please try again later.]"
 
     return "All AI models are temporarily unavailable. Please try again in a few minutes."
 
@@ -496,7 +559,7 @@ def generate_title(user_message: str, assistant_reply: str = "") -> str:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a helpful assistant. Generate a very concise title (maximum 4 words) for a conversation based on the user's request and the assistant's reply. Return only the title text, no quotes, no emojis, and no prefix."
+                    "content": "You are a creative titling expert. Generate a professional and catchy title (maximum 3 words) that captures the core technical essence of the conversation. Return only the title text, no quotes, no emojis, and no prefix."
                 },
                 {"role": "user", "content": content_prompt},
             ],

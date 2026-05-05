@@ -162,7 +162,7 @@ async def send_message(
     db.add(asst_msg)
 
     # Update chat title automatically if it's the first message
-    if chat.title == "New Chat":
+    if chat.title in ("New Chat", "New Conversation", "", None):
         from backend.services.ai_engine import generate_title
         chat.title = generate_title(body.content, ai_text)
 
@@ -173,6 +173,72 @@ async def send_message(
         "user_message":      {"role": "user",      "content": body.content},
         "assistant_message": {"role": "assistant",  "content": ai_text, "id": asst_msg.id},
     }
+
+
+@router.post("/message/stream")
+async def send_message_stream(
+    body:         SendMessageRequest,
+    current_user: User        = Depends(get_current_user),
+    db:           AsyncSession = Depends(get_db),
+):
+    """
+    Streaming version of /message.
+    Yields tokens for the UI to display in real-time.
+    """
+    result = await db.execute(
+        select(Chat).where(Chat.id == body.chat_id, Chat.user_id == current_user.id)
+    )
+    chat = result.scalar_one_or_none()
+    if chat is None:
+        raise HTTPException(status_code=404, detail="Chat not found.")
+
+    # Fetch history
+    hist_res = await db.execute(
+        select(Message).where(Message.chat_id == chat.id).order_by(Message.created_at.desc()).limit(8)
+    )
+    history = [{"role": m.role, "content": m.content} for m in reversed(hist_res.scalars().all())]
+
+    # Persist user message
+    user_msg = Message(chat_id=chat.id, role="user", content=body.content)
+    db.add(user_msg)
+    await db.commit()
+
+    # Resolve index path
+    index_path = None
+    if body.file_id:
+        file_res = await db.execute(
+            select(UploadedFile).where(UploadedFile.id == body.file_id, UploadedFile.user_id == current_user.id)
+        )
+        uf = file_res.scalar_one_or_none()
+        if uf: index_path = uf.faiss_index_path
+
+    async def stream_generator():
+        from backend.services.rag_pipeline import answer_question_stream
+        from backend.services.ai_engine import generate_answer_stream, generate_title
+        
+        full_text = ""
+        try:
+            if index_path:
+                gen = answer_question_stream(body.content, index_path, language=body.language, history=history)
+            else:
+                gen = generate_answer_stream(body.content, context="", language=body.language, history=history)
+            
+            for token in gen:
+                full_text += token
+                yield token
+            
+            # After stream ends, save assistant reply
+            asst_msg = Message(chat_id=chat.id, role="assistant", content=full_text)
+            db.add(asst_msg)
+            
+            if chat.title in ("New Chat", "New Conversation", "", None):
+                chat.title = generate_title(body.content, full_text)
+            
+            await db.commit()
+        except Exception as e:
+            yield f"\n[Streaming Error: {str(e)}]"
+
+    return StreamingResponse(stream_generator(), media_type="text/plain")
 
 
 @router.get("/history")
