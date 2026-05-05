@@ -28,6 +28,8 @@ const activeDocName  = document.getElementById('activeDocName');
 const dropZone       = document.getElementById('dropZone');
 const fileInput      = document.getElementById('fileInput');
 const filesPanel     = document.getElementById('filesPanel');
+const inputArea      = document.querySelector('.input-area');
+const chatWindow     = document.getElementById('chatWindow');
 
 // ─── Toast helper ─────────────────────────────────────────────────────────
 function showToast(msg, type = 'info') {
@@ -44,18 +46,22 @@ function showToast(msg, type = 'info') {
   }, 3500);
 }
 
-function scrollToBottom() {
+function scrollToBottom(immediate = false) {
   const chatWindow = document.getElementById('chatWindow');
   if (!chatWindow) return;
   
-  // Multi-stage scroll to account for dynamic content rendering (marked, mathjax, etc)
   const performScroll = () => {
-    chatWindow.scrollTo({ top: chatWindow.scrollHeight, behavior: 'smooth' });
+    chatWindow.scrollTo({ 
+      top: chatWindow.scrollHeight, 
+      behavior: immediate ? 'auto' : 'smooth' 
+    });
   };
 
   performScroll();
-  setTimeout(performScroll, 50);
-  setTimeout(performScroll, 150);
+  if (!immediate) {
+    setTimeout(performScroll, 50);
+    setTimeout(performScroll, 150);
+  }
 }
 
 // ─── User Profile Logic ──────────────────────────────────────────────────
@@ -104,12 +110,12 @@ const logoutConfirm = document.getElementById('logoutConfirm');
 
 if (logoutBtn && logoutOverlay) {
   logoutBtn.addEventListener('click', () => {
-    logoutOverlay.classList.add('open');
+    logoutOverlay.classList.add('show');
   });
   
   if (logoutCancel) {
     logoutCancel.addEventListener('click', () => {
-      logoutOverlay.classList.remove('open');
+      logoutOverlay.classList.remove('show');
     });
   }
   
@@ -118,11 +124,24 @@ if (logoutBtn && logoutOverlay) {
       Auth.logout();
     });
   }
-  
-  logoutOverlay.addEventListener('click', (e) => {
-    if (e.target === logoutOverlay) logoutOverlay.classList.remove('open');
-  });
 }
+
+// ─── Adaptive Layout Logic ───────────────────────────────────────────────
+if (inputArea && chatWindow) {
+  const updateLayout = () => {
+    const height = inputArea.offsetHeight;
+    chatWindow.style.paddingBottom = `${height + 20}px`;
+    scrollToBottom(true);
+  };
+
+  const ro = new ResizeObserver(updateLayout);
+  ro.observe(inputArea);
+  // Initial run
+  updateLayout();
+}
+logoutOverlay.addEventListener('click', (e) => {
+  if (e.target === logoutOverlay) logoutOverlay.classList.remove('show');
+});
 
 const archivedChatsBtn = document.getElementById('archivedChatsBtn');
 const hiddenChatsBtn   = document.getElementById('hiddenChatsBtn');
@@ -676,8 +695,14 @@ async function sendMessage() {
 
       try {
         if (fileId) {
-          // Add a "Thinking..." indicator for RAG queries
-          bubble.innerHTML = '<span class="thinking-dots">Thinking<span>.</span><span>.</span><span>.</span></span>';
+          // Standardise on the professional loader for consistency
+          bubble.innerHTML = `
+            <div class="synthesizing-loader">
+              <div class="loader-ring"></div>
+              <div class="loader-text">Analysing Document...</div>
+            </div>
+          `;
+          scrollToBottom(true);
         }
 
         await ChatAPI.sendMessageStream(activeChatId, content, fileId, language, (token) => {
@@ -689,7 +714,7 @@ async function sendMessage() {
           bubble.querySelectorAll('pre').forEach(block => {
              block.style.position = 'relative';
           });
-          scrollToBottom();
+          scrollToBottom(true);
         });
       } catch (err) {
         bubble.innerHTML = `*Error during streaming: ${err.message}*`;

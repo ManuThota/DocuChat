@@ -42,9 +42,6 @@ export function appendMessage(container, role, content, msgId = null) {
   wrap.appendChild(bubble);
   container.appendChild(wrap);
 
-  // Scroll to bottom
-  wrap.scrollIntoView({ behavior: 'smooth', block: 'end' });
-
   return wrap;
 }
 
@@ -91,8 +88,6 @@ export function showTypingIndicator(container) {
   const wrap = document.createElement('div');
   wrap.className = 'message assistant typing-indicator';
 
-
-
   const bubble = document.createElement('div');
   bubble.className = 'msg-bubble';
   for (let i = 0; i < 3; i++) {
@@ -102,7 +97,6 @@ export function showTypingIndicator(container) {
   }
   wrap.appendChild(bubble);
   container.appendChild(wrap);
-  wrap.scrollIntoView({ behavior: 'smooth', block: 'end' });
 
   return wrap;
 }

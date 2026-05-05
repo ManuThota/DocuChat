@@ -121,7 +121,8 @@ def generate_answer(
             f"and ```code``` blocks for ALL commands and code.\n"
             f"4. **EXAMPLES**: Include every example, command, and syntax from the document relevant to the question.\n"
             f"5. **DIRECT**: Begin the answer immediately. No preambles like 'Based on the context'.\n"
-            f"6. **NO EMOJIS**. Markdown only."
+            f"6. **NO EMOJIS**. Markdown only.\n"
+            f"7. **MARKDOWN ONLY**: Use Markdown for text. Use code blocks ONLY for code/commands. Do NOT wrap your whole response in a code block."
         )
         user_content = (
             f"DOCUMENT CONTEXT:\n{context[:20000]}\n\n"
@@ -180,7 +181,8 @@ def generate_answer_stream(
             f"2. **GROUNDED**: Base answers on DOCUMENT CONTEXT.\n"
             f"3. **FORMATTING**: Use Markdown (bold, headers, code blocks).\n"
             f"4. **DIRECT**: No preambles.\n"
-            f"5. **NO EMOJIS**."
+            f"5. **NO EMOJIS**.\n"
+            f"6. **MARKDOWN ONLY**: Use Markdown for text. Use code blocks ONLY for code/commands. Do NOT wrap your whole response in a code block."
         )
         user_content = f"DOCUMENT CONTEXT:\n{context[:20000]}\n\nQUESTION: {question}"
     else:

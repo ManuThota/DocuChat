@@ -138,7 +138,6 @@ async def send_message(
                 mode=body.summary_mode,
                 language=body.language
             )
-            
             return {
                 "user_message":      {"role": "user",      "content": body.content},
                 "assistant_message": {"role": "assistant",  "content": placeholder, "id": asst_msg.id},
@@ -162,7 +161,8 @@ async def send_message(
     db.add(asst_msg)
 
     # Update chat title automatically if it's the first message
-    if chat.title in ("New Chat", "New Conversation", "", None):
+    title_clean = (chat.title or "").strip().lower()
+    if title_clean in ("new chat", "new conversation", ""):
         from backend.services.ai_engine import generate_title
         chat.title = generate_title(body.content, ai_text)
 
@@ -231,7 +231,8 @@ async def send_message_stream(
             asst_msg = Message(chat_id=chat.id, role="assistant", content=full_text)
             db.add(asst_msg)
             
-            if chat.title in ("New Chat", "New Conversation", "", None):
+            title_clean = (chat.title or "").strip().lower()
+            if title_clean in ("new chat", "new conversation", ""):
                 chat.title = generate_title(body.content, full_text)
             
             await db.commit()
