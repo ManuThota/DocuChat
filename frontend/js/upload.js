@@ -41,6 +41,7 @@ export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, ac
     pendingDeleteName = name;
     pendingChatId     = chatId;
     if (deleteNameEl) deleteNameEl.textContent = name;
+    if (deleteConfirm) deleteConfirm.classList.add('btn-danger');
     if (deleteOverlay) deleteOverlay.classList.add('open');
   }
 

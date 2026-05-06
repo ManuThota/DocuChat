@@ -202,8 +202,6 @@ export function initSidebar({ listEl, searchInput, getActiveChatId, showToast, o
   function openActionModal(id, title, type) {
     pendingAction = { id, title, type };
     actionName.textContent = title;
-    actionOverlay.classList.add('open');
-    
     // Customize modal based on action
     if (type === 'delete') {
       actionTitle.textContent = 'Delete Chat?';
@@ -227,6 +225,8 @@ export function initSidebar({ listEl, searchInput, getActiveChatId, showToast, o
       actionConfirm.className = 'btn btn-primary';
       actionConfirm.textContent = 'Hide Chat';
     }
+
+    actionOverlay.classList.add('open');
   }
 
   function closeActionModal() {

@@ -376,24 +376,26 @@
   color: #fff;
   border-color: #ff4d4d;
 }
-.btn-danger,
-#chatActionConfirm,
-#deleteUserConfirm,
-#docDeleteConfirm,
-#discardChangesBtn {
+/* --- Danger Buttons (Delete/Logout/Discard) --- */
+.btn-danger, 
+#chatActionConfirm.btn-danger, 
+#docDeleteConfirm.btn-danger,
+#deleteUserConfirm.btn-danger {
   background: transparent !important;
-  color: var(--error) !important;
-  border: 1.5px solid var(--error) !important;
+  color: #ff3b3b !important;
+  border: 1.5px solid #ff3b3b !important;
   box-shadow: none !important;
+  transition: all 0.2s ease-in-out;
 }
-.btn-danger:hover,
-#chatActionConfirm:hover,
-#deleteUserConfirm:hover,
-#docDeleteConfirm:hover,
-#discardChangesBtn:hover {
-  background: var(--error) !important;
-  color: #fff !important;
-  box-shadow: 0 0 12px rgba(248, 113, 113, 0.3) !important;
+
+.btn-danger:hover, 
+#chatActionConfirm.btn-danger:hover, 
+#docDeleteConfirm.btn-danger:hover,
+#deleteUserConfirm.btn-danger:hover {
+  background: #ff3b3b !important;
+  color: #ffffff !important;
+  border-color: #ff3b3b !important;
+  box-shadow: 0 0 15px rgba(255, 59, 59, 0.4) !important;
 }
 .menu-item.danger:hover svg {
   stroke: #fff;
@@ -1326,15 +1328,7 @@
   box-shadow: none !important;
 }
 
-/* Chat Action Confirm (Delete, Archive, etc.) should be RED */
-#chatActionOverlay .btn:last-child {
-  background: var(--error) !important;
-  color: #fff !important;
-  border: none !important;
-}
-#chatActionOverlay .btn:last-child:hover {
-  background: #dc2626 !important;
-}
+/* Removed overriding solid red style to allow .btn-danger transparency to work */
 
 #renameChatOverlay .btn-primary:hover,
 #profileModalOverlay .btn-primary:hover,
