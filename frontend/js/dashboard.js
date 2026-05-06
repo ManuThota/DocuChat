@@ -46,9 +46,17 @@ function showToast(msg, type = 'info') {
   }, 3500);
 }
 
+let isUserScrolledUp = false;
+
 function scrollToBottom(immediate = false) {
   const chatWindow = document.getElementById('chatWindow');
   if (!chatWindow) return;
+  
+  // If the user has scrolled up more than 50px from the bottom, don't auto-scroll
+  const distanceToBottom = chatWindow.scrollHeight - chatWindow.scrollTop - chatWindow.clientHeight;
+  if (distanceToBottom > 50 && immediate) {
+    return; // Respect user's scroll position during stream
+  }
   
   const performScroll = () => {
     chatWindow.scrollTop = chatWindow.scrollHeight;
@@ -74,7 +82,10 @@ async function typeText(bubble, text) {
     bubble.innerHTML = marked.parse(current);
     bubble.querySelectorAll('pre').forEach(block => { block.style.position = 'relative'; });
     scrollToBottom(true);
-    await new Promise(r => setTimeout(r, 15 + Math.random() * 15));
+    // Fast-forward if tab is hidden
+    if (!document.hidden) {
+      await new Promise(r => setTimeout(r, 15 + Math.random() * 15));
+    }
   }
 }
 
@@ -732,11 +743,15 @@ async function sendMessage() {
           bubble.querySelectorAll('pre').forEach(block => { block.style.position = 'relative'; });
           scrollToBottom(true);
           
-          // Match the comfortable speed of document summaries (approx 20ms)
-          await new Promise(r => setTimeout(r, 20));
+          // Match the comfortable speed of document summaries, but fast-forward if hidden
+          if (!document.hidden) {
+            await new Promise(r => setTimeout(r, 20));
+          }
         } else {
           // Brief pause to wait for next chunk
-          await new Promise(r => setTimeout(r, 10));
+          if (!document.hidden) {
+            await new Promise(r => setTimeout(r, 10));
+          }
         }
       }
       

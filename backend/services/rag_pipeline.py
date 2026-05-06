@@ -178,11 +178,11 @@ def answer_question(
     is_social = any(clean_q == g or clean_q.startswith(g + " ") for g in greetings) or len(clean_q) < 3
     
     if is_social:
-        return generate_answer(question, context="", language=language, history=history)
+        return generate_answer(question, context="", language=language, history=history, doc_active=True)
 
     chunks  = retrieve_relevant_chunks(question, index_path, top_k=8)
     context = "\n\n".join(chunks) if chunks else ""
-    return generate_answer(question, context, language=language, history=history)
+    return generate_answer(question, context, language=language, history=history, doc_active=True)
 
 
 def answer_question_stream(
@@ -198,12 +198,12 @@ def answer_question_stream(
     is_social = any(clean_q == g or clean_q.startswith(g + " ") for g in greetings) or len(clean_q) < 3
     
     if is_social:
-        yield from generate_answer_stream(question, context="", language=language, history=history)
+        yield from generate_answer_stream(question, context="", language=language, history=history, doc_active=True)
         return
 
     chunks  = retrieve_relevant_chunks(question, index_path, top_k=8)
     context = "\n\n".join(chunks) if chunks else ""
-    yield from generate_answer_stream(question, context, language=language, history=history)
+    yield from generate_answer_stream(question, context, language=language, history=history, doc_active=True)
 
 
 def summarize_document(

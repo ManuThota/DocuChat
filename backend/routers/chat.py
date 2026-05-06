@@ -118,6 +118,13 @@ async def send_message(
         if uploaded_file:
             index_path = uploaded_file.faiss_index_path
 
+    # ─── Eager Chat Titling ───────────────────────────────────────────────────
+    title_clean = (chat.title or "").strip().lower()
+    if title_clean in ("new chat", "new conversation", ""):
+        from backend.services.ai_engine import generate_title
+        chat.title = generate_title(body.content)
+        await db.commit()
+
     # ─── AI generation ────────────────────────────────────────────────────────
     try:
         if body.summary_mode and index_path:
@@ -161,11 +168,7 @@ async def send_message(
     asst_msg = Message(chat_id=chat.id, role="assistant", content=ai_text)
     db.add(asst_msg)
 
-    # Update chat title immediately if it's the first message
-    title_clean = (chat.title or "").strip().lower()
-    if title_clean in ("new chat", "new conversation", ""):
-        from backend.services.ai_engine import generate_title
-        chat.title = generate_title(body.content) # Only use user message for speed
+
 
     await db.commit()
     await db.refresh(asst_msg)
@@ -212,13 +215,19 @@ async def send_message_stream(
         uf = file_res.scalar_one_or_none()
         if uf: index_path = uf.faiss_index_path
 
+    # Generate title eagerly if it's a "New Chat"
+    title_clean = (chat.title or "").strip().lower()
+    if title_clean in ("new chat", "new conversation", ""):
+        chat.title = generate_title(body.content)
+        await db.commit()
+
     async def stream_generator():
         full_text = ""
         try:
             if index_path:
                 gen = answer_question_stream(body.content, index_path, language=body.language, history=history)
             else:
-                gen = generate_answer_stream(body.content, context="", language=body.language, history=history)
+                gen = generate_answer_stream(body.content, context="", language=body.language, history=history, doc_active=(index_path is not None))
             
             for token in gen:
                 full_text += token
@@ -227,12 +236,6 @@ async def send_message_stream(
             # After stream ends, save assistant reply
             asst_msg = Message(chat_id=chat.id, role="assistant", content=full_text)
             db.add(asst_msg)
-            
-            # Update chat title automatically if it's the first message
-            title_clean = (chat.title or "").strip().lower()
-            if title_clean in ("new chat", "new conversation", ""):
-                chat.title = generate_title(body.content, full_text)
-            
             await db.commit()
         except Exception as e:
             yield f"\n[Streaming Error: {str(e)}]"

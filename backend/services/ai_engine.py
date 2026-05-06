@@ -91,18 +91,10 @@ def generate_answer(
     context: str,
     language: str = "English",
     history: list[dict] | None = None,
+    doc_active: bool = False
 ) -> str:
     """
-    Generate a grounded answer using Llama-3.1-8B via Groq.
-
-    Args:
-        question: The user's question.
-        context:  Retrieved document chunks. Pass "" for general questions.
-        language: Target response language.
-        history:  List of previous messages: [{"role": "user", "content": "..."}, ...]
-
-    Returns:
-        AI-generated answer string.
+    Generate a standalone answer.
     """
     client = _groq_client()
 
@@ -111,33 +103,30 @@ def generate_answer(
             f"You are an expert document assistant. \n"
             f"STRICT REQUIREMENT: You MUST respond ONLY in {language}. This is non-negotiable.\n"
             f"RULES:\n"
-            f"1. **DEPTH FIRST**: For any specific topic, give an exhaustive, in-depth answer. "
-            f"Cover every detail, sub-point, step, command, and example present in the document about that topic. "
-            f"Do NOT give a vague overview when detailed info is available.\n"
-            f"2. **GROUNDED**: Base answers on the DOCUMENT CONTEXT. "
-            f"If a topic is not in the document, say so briefly then answer from general knowledge.\n"
-            f"3. **FORMATTING**: Use **bold** for key terms, *italics* for definitions, "
-            f"### headers for major sub-topics, numbered/bullet lists for steps, "
-            f"and ```code``` blocks for ALL commands and code.\n"
-            f"4. **EXAMPLES**: Include every example, command, and syntax from the document relevant to the question.\n"
-            f"5. **DIRECT**: Begin the answer immediately. No preambles like 'Based on the context'.\n"
-            f"6. **NO EMOJIS**. Markdown only.\n"
-            f"7. **MARKDOWN ONLY**: Use Markdown for text. Use code blocks ONLY for code/commands. Do NOT wrap your whole response in a code block."
+            f"1. **DEPTH FIRST**: exhaustive, in-depth answer.\n"
+            f"2. **GROUNDED**: Base answers on DOCUMENT CONTEXT.\n"
+            f"3. **FORMATTING**: Markdown only.\n"
+            f"4. **DIRECT**: No preambles.\n"
+            f"5. **NO EMOJIS**."
         )
-        user_content = (
-            f"DOCUMENT CONTEXT:\n{context[:20000]}\n\n"
-            f"QUESTION: {question}"
-        )
+        user_content = f"DOCUMENT CONTEXT:\n{context[:20000]}\n\nQUESTION: {question}"
     else:
         system_content = (
             f"You are a helpful AI assistant. \n"
             f"STRICT REQUIREMENT: You MUST respond ONLY in {language}. This is non-negotiable.\n"
-            f"IMPORTANT: No document is currently selected. \n"
-            f"CRITICAL RULE: If the user asks about a document, its contents, or previously discussed technical details from a file, "
-            f"politely state that no document is selected and they should choose one from the sidebar. \n"
-            f"Do NOT summarize, explain, or recall information from previous documents if context is empty.\n"
             f"Do not use emojis. Use Markdown formatting."
         )
+        if not doc_active:
+            system_content += (
+                "\nIMPORTANT: No document is currently selected. \n"
+                "CRITICAL RULE: IGNORE all previous document content in the conversation history. "
+                "If the user asks about a document, politely inform them they must select one from the sidebar first."
+            )
+        else:
+            system_content += (
+                "\nNOTE: A document is selected in the UI, but the current query does not require document context. "
+                "Answer the user's greeting or general question naturally. DO NOT provide unprompted document analysis."
+            )
         user_content = question
 
     messages = [{"role": "system", "content": system_content}]
@@ -170,6 +159,7 @@ def generate_answer_stream(
     context: str,
     language: str = "English",
     history: list[dict] | None = None,
+    doc_active: bool = False
 ):
     """
     Generator that yields tokens in real-time.
@@ -183,27 +173,43 @@ def generate_answer_stream(
             f"RULES:\n"
             f"1. **DEPTH FIRST**: exhaustive, in-depth answer.\n"
             f"2. **GROUNDED**: Base answers on DOCUMENT CONTEXT.\n"
-            f"3. **FORMATTING**: Use Markdown (bold, headers, code blocks).\n"
+            f"3. **FORMATTING**: Use Markdown.\n"
             f"4. **DIRECT**: No preambles.\n"
-            f"5. **NO EMOJIS**.\n"
-            f"6. **MARKDOWN ONLY**: Use Markdown for text. Use code blocks ONLY for code/commands. Do NOT wrap your whole response in a code block."
+            f"5. **NO EMOJIS**."
         )
         user_content = f"DOCUMENT CONTEXT:\n{context[:20000]}\n\nQUESTION: {question}"
     else:
         system_content = (
             f"You are a helpful AI assistant. \n"
             f"STRICT REQUIREMENT: You MUST respond ONLY in {language}. This is non-negotiable.\n"
-            f"IMPORTANT: No document is currently selected. \n"
-            f"CRITICAL RULE: If the user asks about a document, its contents, or previously discussed technical details from a file, "
-            f"politely state that no document is selected and they should choose one from the sidebar. \n"
-            f"Do NOT summarize, explain, or recall information from previous documents if context is empty.\n"
             f"Do not use emojis. Use Markdown formatting."
         )
+        if not doc_active:
+            system_content += (
+                "\nIMPORTANT: No document is currently selected. \n"
+                "CRITICAL RULE: IGNORE all previous document content in the conversation history. "
+                "If the user asks about a document, politely inform them they must select one from the sidebar first."
+            )
+        else:
+            system_content += (
+                "\nNOTE: A document is selected in the UI, but the current query does not require document context. "
+                "Answer the user's greeting or general question naturally. DO NOT provide unprompted document analysis."
+            )
         user_content = question
 
-    messages = [{"role": "system", "content": system_content}]
+    clean_history = []
     if history:
-        messages.extend(history[-10:])
+        for msg in history[-10:]:
+            content = msg["content"]
+            if msg["role"] == "user" and "DOCUMENT CONTEXT:" in content:
+                parts = content.split("QUESTION: ")
+                if len(parts) > 1:
+                    content = parts[-1]
+            clean_history.append({"role": msg["role"], "content": content})
+
+    messages = [{"role": "system", "content": system_content}]
+    if clean_history:
+        messages.extend(clean_history)
     messages.append({"role": "user", "content": user_content})
 
     for model in GROQ_MODELS:
@@ -569,7 +575,7 @@ def generate_title(user_message: str, assistant_reply: str = "") -> str:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a professional titling expert. Generate a concise, catchy title (maximum 3 words) based on the context. Return ONLY the title text. Do NOT include prefixes like 'Title:', 'Chat:', or any quotes or punctuation."
+                    "content": "You are a professional titling expert. Generate a concise, catchy title (maximum 3 words) based on the context. Return ONLY the title text. Do NOT include prefixes like 'Title:', 'Chat:', or any quotes or punctuation. If the user asks for a document summary but no document is provided, just return 'Document Summary'. NEVER complain, write full sentences, or output error messages."
                 },
                 {"role": "user", "content": content_prompt},
             ],
