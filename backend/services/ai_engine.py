@@ -132,6 +132,10 @@ def generate_answer(
         system_content = (
             f"You are a helpful AI assistant. \n"
             f"STRICT REQUIREMENT: You MUST respond ONLY in {language}. This is non-negotiable.\n"
+            f"IMPORTANT: No document is currently selected. \n"
+            f"CRITICAL RULE: If the user asks about a document, its contents, or previously discussed technical details from a file, "
+            f"politely state that no document is selected and they should choose one from the sidebar. \n"
+            f"Do NOT summarize, explain, or recall information from previous documents if context is empty.\n"
             f"Do not use emojis. Use Markdown formatting."
         )
         user_content = question
@@ -189,6 +193,10 @@ def generate_answer_stream(
         system_content = (
             f"You are a helpful AI assistant. \n"
             f"STRICT REQUIREMENT: You MUST respond ONLY in {language}. This is non-negotiable.\n"
+            f"IMPORTANT: No document is currently selected. \n"
+            f"CRITICAL RULE: If the user asks about a document, its contents, or previously discussed technical details from a file, "
+            f"politely state that no document is selected and they should choose one from the sidebar. \n"
+            f"Do NOT summarize, explain, or recall information from previous documents if context is empty.\n"
             f"Do not use emojis. Use Markdown formatting."
         )
         user_content = question
@@ -561,16 +569,18 @@ def generate_title(user_message: str, assistant_reply: str = "") -> str:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a creative titling expert. Generate a professional and catchy title (maximum 3 words) that captures the core technical essence of the conversation. Return only the title text, no quotes, no emojis, and no prefix."
+                    "content": "You are a professional titling expert. Generate a concise, catchy title (maximum 3 words) based on the context. Return ONLY the title text. Do NOT include prefixes like 'Title:', 'Chat:', or any quotes or punctuation."
                 },
                 {"role": "user", "content": content_prompt},
             ],
-            max_tokens=20,
-            temperature=0.5,
+            max_tokens=15,
+            temperature=0.3,
         )
         title = response.choices[0].message.content.strip()
-        # Clean up any quotes
-        return title.replace('"', '').replace("'", "")
+        # Aggressive cleanup
+        for prefix in ["title:", "chat:", "conversation:", "subject:"]:
+            if title.lower().startswith(prefix):
+                title = title[len(prefix):].strip()
+        return title.replace('"', '').replace("'", "").strip()
     except Exception:
-        # Fallback to simple truncation
-        return user_message[:30] + "..."
+        return user_message[:30].strip() + "..."

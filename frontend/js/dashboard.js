@@ -51,16 +51,30 @@ function scrollToBottom(immediate = false) {
   if (!chatWindow) return;
   
   const performScroll = () => {
-    chatWindow.scrollTo({ 
-      top: chatWindow.scrollHeight, 
-      behavior: immediate ? 'auto' : 'smooth' 
-    });
+    chatWindow.scrollTop = chatWindow.scrollHeight;
   };
-
+  
   performScroll();
   if (!immediate) {
+    requestAnimationFrame(performScroll);
     setTimeout(performScroll, 50);
     setTimeout(performScroll, 150);
+    setTimeout(performScroll, 300);
+  }
+}
+
+/** 
+ * Simulates a typing effect for non-streaming responses.
+ */
+async function typeText(bubble, text) {
+  const tokens = text.split(/(\s+)/);
+  let current = "";
+  for (const token of tokens) {
+    current += token;
+    bubble.innerHTML = marked.parse(current);
+    bubble.querySelectorAll('pre').forEach(block => { block.style.position = 'relative'; });
+    scrollToBottom(true);
+    await new Promise(r => setTimeout(r, 15 + Math.random() * 15));
   }
 }
 
@@ -110,12 +124,12 @@ const logoutConfirm = document.getElementById('logoutConfirm');
 
 if (logoutBtn && logoutOverlay) {
   logoutBtn.addEventListener('click', () => {
-    logoutOverlay.classList.add('show');
+    logoutOverlay.classList.add('open');
   });
   
   if (logoutCancel) {
     logoutCancel.addEventListener('click', () => {
-      logoutOverlay.classList.remove('show');
+      logoutOverlay.classList.remove('open');
     });
   }
   
@@ -130,17 +144,19 @@ if (logoutBtn && logoutOverlay) {
 if (inputArea && chatWindow) {
   const updateLayout = () => {
     const height = inputArea.offsetHeight;
-    chatWindow.style.paddingBottom = `${height + 20}px`;
+    // Set padding enough to clear the input area plus extra breathing room
+    chatWindow.style.paddingBottom = `${height + 40}px`;
     scrollToBottom(true);
   };
 
   const ro = new ResizeObserver(updateLayout);
   ro.observe(inputArea);
-  // Initial run
+  // Also observe window resize
+  window.addEventListener('resize', updateLayout);
   updateLayout();
 }
 logoutOverlay.addEventListener('click', (e) => {
-  if (e.target === logoutOverlay) logoutOverlay.classList.remove('show');
+  if (e.target === logoutOverlay) logoutOverlay.classList.remove('open');
 });
 
 const archivedChatsBtn = document.getElementById('archivedChatsBtn');
@@ -669,7 +685,7 @@ async function sendMessage() {
   appendMessage(chatInner, 'user', content);
   scrollToBottom();
   
-  // Refresh sidebar immediately for new chats
+  // Refresh sidebar immediately for new chats so the title appears right away
   await sidebar.refresh();
   sidebar.setActive(activeChatId);
 
@@ -688,41 +704,43 @@ async function sendMessage() {
         appendMessage(chatInner, 'assistant', assistantContent, msgId);
         pollSummary(activeChatId, msgId);
       } else {
-        appendMessage(chatInner, 'assistant', assistantContent, msgId);
+        const messageEl = appendMessage(chatInner, 'assistant', '', msgId);
+        const bubble = messageEl.querySelector('.msg-bubble');
+        await typeText(bubble, assistantContent);
       }
     } else {
-      // Use streaming API for regular chat
+      // Use streaming API for regular chat with a controlled typing speed
       if (typingEl) typingEl.remove();
       const messageEl = appendMessage(chatInner, 'assistant', '', null);
       const bubble = messageEl.querySelector('.msg-bubble');
+      
       let fullText = "";
+      let tokenQueue = [];
+      let streamFinished = false;
 
-      try {
-        if (fileId) {
-          // Standardise on the professional loader for consistency
-          bubble.innerHTML = `
-            <div class="synthesizing-loader">
-              <div class="loader-ring"></div>
-              <div class="loader-text">Analysing Document...</div>
-            </div>
-          `;
-          scrollToBottom(true);
-        }
+      // Producer: Consume the stream as fast as it comes
+      const streamPromise = ChatAPI.sendMessageStream(activeChatId, content, fileId, language, (token) => {
+        tokenQueue.push(token);
+      }).then(() => { streamFinished = true; }).catch(err => { streamFinished = true; throw err; });
 
-        await ChatAPI.sendMessageStream(activeChatId, content, fileId, language, (token) => {
-          // Remove indicator on first token
-          if (fullText === "" && fileId) bubble.innerHTML = "";
-          
+      // Consumer: Render tokens at a controlled "writing style" speed
+      while (!streamFinished || tokenQueue.length > 0) {
+        if (tokenQueue.length > 0) {
+          const token = tokenQueue.shift();
           fullText += token;
           bubble.innerHTML = marked.parse(fullText);
-          bubble.querySelectorAll('pre').forEach(block => {
-             block.style.position = 'relative';
-          });
+          bubble.querySelectorAll('pre').forEach(block => { block.style.position = 'relative'; });
           scrollToBottom(true);
-        });
-      } catch (err) {
-        bubble.innerHTML = `*Error during streaming: ${err.message}*`;
+          
+          // Match the comfortable speed of document summaries (approx 20ms)
+          await new Promise(r => setTimeout(r, 20));
+        } else {
+          // Brief pause to wait for next chunk
+          await new Promise(r => setTimeout(r, 10));
+        }
       }
+      
+      await streamPromise; // Ensure any errors are caught
     }
 
     // After completion, update UI state
@@ -952,11 +970,8 @@ async function pollSummary(chatId, messageId) {
         if (targetEl) {
           const bubble = targetEl.querySelector('.msg-bubble');
           if (bubble) {
-            bubble.innerHTML = marked.parse(msg.content);
-            bubble.querySelectorAll('pre').forEach(block => {
-              block.style.position = 'relative';
-            });
-            targetEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            bubble.innerHTML = ''; // Clear SYNTHESIZING
+            await typeText(bubble, msg.content);
           }
         }
         

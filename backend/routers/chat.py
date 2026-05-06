@@ -20,7 +20,8 @@ from backend.database import get_db
 from backend.models.chat import Chat, Message
 from backend.models.file import UploadedFile
 from backend.models.user import User
-from backend.services.rag_pipeline import answer_question, summarize_document
+from backend.services.rag_pipeline import answer_question, summarize_document, answer_question_stream
+from backend.services.ai_engine import generate_answer_stream, generate_title
 
 import os
 from backend.config import get_settings
@@ -198,17 +199,9 @@ async def send_message_stream(
     )
     history = [{"role": m.role, "content": m.content} for m in reversed(hist_res.scalars().all())]
 
-    # Persist user message
     user_msg = Message(chat_id=chat.id, role="user", content=body.content)
     db.add(user_msg)
     await db.commit()
-
-    # Generate title immediately if it's a "New Chat"
-    title_clean = (chat.title or "").strip().lower()
-    if title_clean in ("new chat", "new conversation", ""):
-        from backend.services.ai_engine import generate_title
-        chat.title = generate_title(body.content)
-        await db.commit()
 
     # Resolve index path
     index_path = None
@@ -220,9 +213,6 @@ async def send_message_stream(
         if uf: index_path = uf.faiss_index_path
 
     async def stream_generator():
-        from backend.services.rag_pipeline import answer_question_stream
-        from backend.services.ai_engine import generate_answer_stream, generate_title
-        
         full_text = ""
         try:
             if index_path:
@@ -238,7 +228,11 @@ async def send_message_stream(
             asst_msg = Message(chat_id=chat.id, role="assistant", content=full_text)
             db.add(asst_msg)
             
-            # Title is now generated at the start
+            # Update chat title automatically if it's the first message
+            title_clean = (chat.title or "").strip().lower()
+            if title_clean in ("new chat", "new conversation", ""):
+                chat.title = generate_title(body.content, full_text)
+            
             await db.commit()
         except Exception as e:
             yield f"\n[Streaming Error: {str(e)}]"

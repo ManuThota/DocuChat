@@ -28,6 +28,10 @@ async function apiFetch(path, options = {}) {
   if (res.status === 204) return null;
 
   if (!res.ok) {
+    if (res.status === 401) {
+      Auth.logout(); // Redirect to login on unauthorized
+      return;
+    }
     let message = `HTTP ${res.status}`;
     try {
       const err = await res.json();
