@@ -831,7 +831,7 @@
 .chat-window {
   flex: 1;
   overflow-y: auto;
-  padding: 90px 24px 120px 24px; /* Balanced padding to lift end of chat without excessive gap */
+  padding: 90px 24px 60px 24px; /* Further reduced bottom padding for a tighter fit */
   display: flex;
   flex-direction: column;
 }
