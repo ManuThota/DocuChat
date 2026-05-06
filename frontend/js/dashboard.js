@@ -668,6 +668,10 @@ async function sendMessage() {
   welcomeScreen.style.display = 'none';
   appendMessage(chatInner, 'user', content);
   scrollToBottom();
+  
+  // Refresh sidebar immediately for new chats
+  await sidebar.refresh();
+  sidebar.setActive(activeChatId);
 
   const typingEl = showTypingIndicator(chatInner);
 
@@ -724,10 +728,14 @@ async function sendMessage() {
     // After completion, update UI state
     await sidebar.refresh();
     sidebar.setActive(activeChatId);
+    
+    // Explicitly update the topbar title from the DB
     try {
       const chatData = await ChatAPI.getChat(activeChatId);
-      chatTitle.textContent = chatData.title;
-    } catch (e) {}
+      if (chatTitle) chatTitle.textContent = chatData.title;
+    } catch (e) {
+      console.error("Failed to update chat header:", e);
+    }
   } catch (err) {
     if (typingEl) typingEl.remove();
     showToast(err.message || 'Failed to send message.', 'error');

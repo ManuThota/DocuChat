@@ -160,11 +160,11 @@ async def send_message(
     asst_msg = Message(chat_id=chat.id, role="assistant", content=ai_text)
     db.add(asst_msg)
 
-    # Update chat title automatically if it's the first message
+    # Update chat title immediately if it's the first message
     title_clean = (chat.title or "").strip().lower()
     if title_clean in ("new chat", "new conversation", ""):
         from backend.services.ai_engine import generate_title
-        chat.title = generate_title(body.content, ai_text)
+        chat.title = generate_title(body.content) # Only use user message for speed
 
     await db.commit()
     await db.refresh(asst_msg)
@@ -203,6 +203,13 @@ async def send_message_stream(
     db.add(user_msg)
     await db.commit()
 
+    # Generate title immediately if it's a "New Chat"
+    title_clean = (chat.title or "").strip().lower()
+    if title_clean in ("new chat", "new conversation", ""):
+        from backend.services.ai_engine import generate_title
+        chat.title = generate_title(body.content)
+        await db.commit()
+
     # Resolve index path
     index_path = None
     if body.file_id:
@@ -231,10 +238,7 @@ async def send_message_stream(
             asst_msg = Message(chat_id=chat.id, role="assistant", content=full_text)
             db.add(asst_msg)
             
-            title_clean = (chat.title or "").strip().lower()
-            if title_clean in ("new chat", "new conversation", ""):
-                chat.title = generate_title(body.content, full_text)
-            
+            # Title is now generated at the start
             await db.commit()
         except Exception as e:
             yield f"\n[Streaming Error: {str(e)}]"
