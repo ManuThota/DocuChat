@@ -48,26 +48,33 @@ function showToast(msg, type = 'info') {
 
 let isUserScrolledUp = false;
 
+if (chatWindow) {
+  chatWindow.addEventListener('scroll', () => {
+    // Track if the user manually scrolled up (more than 50px from bottom)
+    const distanceToBottom = chatWindow.scrollHeight - chatWindow.scrollTop - chatWindow.clientHeight;
+    isUserScrolledUp = distanceToBottom > 50;
+  });
+}
+
 function scrollToBottom(immediate = false) {
-  const chatWindow = document.getElementById('chatWindow');
   if (!chatWindow) return;
   
-  // If the user has scrolled up more than 50px from the bottom, don't auto-scroll
-  const distanceToBottom = chatWindow.scrollHeight - chatWindow.scrollTop - chatWindow.clientHeight;
-  if (distanceToBottom > 50 && immediate) {
-    return; // Respect user's scroll position during stream
+  if (isUserScrolledUp && immediate) {
+    return; // Respect user's manual scroll position during stream
   }
   
   const performScroll = () => {
-    chatWindow.scrollTop = chatWindow.scrollHeight;
+    if (immediate) {
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    } else {
+      chatWindow.scrollTo({ top: chatWindow.scrollHeight, behavior: 'smooth' });
+    }
   };
   
   performScroll();
   if (!immediate) {
-    requestAnimationFrame(performScroll);
-    setTimeout(performScroll, 50);
-    setTimeout(performScroll, 150);
-    setTimeout(performScroll, 300);
+    // Safety fallback to ensure it snaps to bottom after smooth scroll
+    setTimeout(() => chatWindow.scrollTop = chatWindow.scrollHeight, 300);
   }
 }
 
@@ -980,6 +987,12 @@ async function pollSummary(chatId, messageId) {
       if (msg && msg.content !== '[SYNTHESIZING]') {
         clearInterval(pollInterval);
         
+        // Refresh sidebar and title because the background task may have generated a new title based on the response
+        await sidebar.refresh();
+        if (data && data.title && data.title !== 'New Chat') {
+          chatTitle.textContent = data.title;
+        }
+
         // Find this specific message bubble by its data-message-id tag
         const targetEl = document.querySelector(`[data-message-id="${messageId}"]`);
         if (targetEl) {
@@ -1010,6 +1023,9 @@ function resetChatView() {
   document.documentElement.style.removeProperty('--welcome-display');
   welcomeScreen.style.display = 'flex';
   filesPanel.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 12px;">Select a chat to see its documents.</div>';
+  if (msgInput) {
+    msgInput.value = '';
+  }
 }
 
 // ─── Init: restore theme ──────────────────────────────────────────────────

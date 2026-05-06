@@ -246,6 +246,9 @@ async def process_summary_background(
     index_path: str,
     mode: str,
     language: str,
+    chat_id: int = None,
+    user_prompt: str = None,
+    file_name: str = None
 ):
     """
     Async background task to process a long summary and update the database record.
@@ -253,7 +256,7 @@ async def process_summary_background(
     """
     from backend.database import AsyncSessionLocal
     from backend.models.chat import Message
-    from sqlalchemy import update
+    from sqlalchemy import update, select
     import asyncio
 
     async def _save_to_db(content: str):
@@ -288,7 +291,28 @@ async def process_summary_background(
 
         # 3. Final save (ensure we write even if no parts were yielded)
         if not full_summary:
-            await _save_to_db("Summary generation failed. The AI service may be temporarily unavailable. Please try again.")
+            full_summary = "Summary generation failed. The AI service may be temporarily unavailable. Please try again."
+            await _save_to_db(full_summary)
+
+        # 4. Post-response Titling
+        if chat_id and user_prompt and full_summary and "failed" not in full_summary:
+            from backend.database import AsyncSessionLocal
+            from backend.models.chat import Chat
+            from backend.services.ai_engine import generate_title
+            
+            try:
+                async with AsyncSessionLocal() as db:
+                    chat_res = await db.execute(
+                        select(Chat).where(Chat.id == chat_id)
+                    )
+                    chat = chat_res.scalar_one_or_none()
+                    if chat:
+                        title_clean = (chat.title or "").strip().lower()
+                        if title_clean in ("new chat", "new conversation", ""):
+                            chat.title = generate_title(user_prompt, assistant_reply=full_summary, file_name=file_name)
+                            await db.commit()
+            except Exception as title_err:
+                print(f"[BG] Title generation failed: {title_err}")
 
     except Exception as e:
         print(f"[BG] Background summary crashed: {e}")

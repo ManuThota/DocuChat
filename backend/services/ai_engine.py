@@ -114,18 +114,22 @@ def generate_answer(
         system_content = (
             f"You are a helpful AI assistant. \n"
             f"STRICT REQUIREMENT: You MUST respond ONLY in {language}. This is non-negotiable.\n"
-            f"Do not use emojis. Use Markdown formatting."
+            f"Do not use emojis. Use Markdown formatting. DO NOT wrap regular text in markdown code blocks unless you are writing actual programming code."
         )
         if not doc_active:
             system_content += (
-                "\nIMPORTANT: No document is currently selected. \n"
-                "CRITICAL RULE: IGNORE all previous document content in the conversation history. "
-                "If the user asks about a document, politely inform them they must select one from the sidebar first."
+                "\nIMPORTANT: No document is currently selected. "
+                "Act purely as a general chatbot. "
+                "If the user asks a general question, answer it normally. "
+                "CRITICAL: If the user asks ANY question referring to 'the document', 'this file', or anything related to previously discussed documents, you MUST REJECT IT. "
+                "You must say EXACTLY: 'No document is currently selected. Please choose a document from the sidebar to discuss.' "
+                "DO NOT attempt to answer using conversation history."
             )
         else:
             system_content += (
-                "\nNOTE: A document is selected in the UI, but the current query does not require document context. "
-                "Answer the user's greeting or general question naturally. DO NOT provide unprompted document analysis."
+                "\nCRITICAL RULE: The user is making a general statement or greeting. "
+                "Acknowledge them naturally and briefly. "
+                "DO NOT complain about missing documents, DO NOT ask them to select a document, and DO NOT mention summarization."
             )
         user_content = question
 
@@ -182,18 +186,22 @@ def generate_answer_stream(
         system_content = (
             f"You are a helpful AI assistant. \n"
             f"STRICT REQUIREMENT: You MUST respond ONLY in {language}. This is non-negotiable.\n"
-            f"Do not use emojis. Use Markdown formatting."
+            f"Do not use emojis. Use Markdown formatting. DO NOT wrap regular text in markdown code blocks unless you are writing actual programming code."
         )
         if not doc_active:
             system_content += (
-                "\nIMPORTANT: No document is currently selected. \n"
-                "CRITICAL RULE: IGNORE all previous document content in the conversation history. "
-                "If the user asks about a document, politely inform them they must select one from the sidebar first."
+                "\nIMPORTANT: No document is currently selected. "
+                "Act purely as a general chatbot. "
+                "If the user asks a general question, answer it normally. "
+                "CRITICAL: If the user asks ANY question referring to 'the document', 'this file', or anything related to previously discussed documents, you MUST REJECT IT. "
+                "You must say EXACTLY: 'No document is currently selected. Please choose a document from the sidebar to discuss.' "
+                "DO NOT attempt to answer using conversation history."
             )
         else:
             system_content += (
-                "\nNOTE: A document is selected in the UI, but the current query does not require document context. "
-                "Answer the user's greeting or general question naturally. DO NOT provide unprompted document analysis."
+                "\nCRITICAL RULE: The user is making a general statement or greeting. "
+                "Acknowledge them naturally and briefly. "
+                "DO NOT complain about missing documents, DO NOT ask them to select a document, and DO NOT mention summarization."
             )
         user_content = question
 
@@ -560,13 +568,15 @@ def _groq_translate(text: str, language: str) -> str:
     return response.choices[0].message.content.strip()
 
 
-def generate_title(user_message: str, assistant_reply: str = "") -> str:
+def generate_title(user_message: str, assistant_reply: str = "", file_name: str = None) -> str:
     """
     Generate a very short (2-4 words) title for a conversation based on the first message and reply.
     """
     try:
         client = _groq_client()
         content_prompt = f"User: {user_message}\n"
+        if file_name:
+            content_prompt += f"Active Document: {file_name}\n"
         if assistant_reply:
             content_prompt += f"Assistant: {assistant_reply[:500]}\n"
             
@@ -575,7 +585,13 @@ def generate_title(user_message: str, assistant_reply: str = "") -> str:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a professional titling expert. Generate a concise, catchy title (maximum 3 words) based on the context. Return ONLY the title text. Do NOT include prefixes like 'Title:', 'Chat:', or any quotes or punctuation."
+                    "content": (
+                        "You are a professional UX titling expert. Your ONLY purpose is to extract an ultra-concise 2-3 word "
+                        "title summarizing the core topic of the conversation. Do NOT answer the user. Do NOT converse. "
+                        "Make the titles sound modern, highly professional, and cool (e.g., 'Python Ecosystem', 'Conda Strategy', 'System Architecture'). "
+                        "Base your title primarily on the provided Assistant response. "
+                        "Return ONLY the title text. No quotes, no prefixes."
+                    )
                 },
                 {"role": "user", "content": content_prompt},
             ],

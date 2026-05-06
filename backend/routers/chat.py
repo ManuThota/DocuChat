@@ -118,12 +118,7 @@ async def send_message(
         if uploaded_file:
             index_path = uploaded_file.faiss_index_path
 
-    # ─── Eager Chat Titling ───────────────────────────────────────────────────
-    title_clean = (chat.title or "").strip().lower()
-    if title_clean in ("new chat", "new conversation", ""):
-        from backend.services.ai_engine import generate_title
-        chat.title = generate_title(body.content)
-        await db.commit()
+
 
     # ─── AI generation ────────────────────────────────────────────────────────
     try:
@@ -138,13 +133,17 @@ async def send_message(
             await db.commit()
             await db.refresh(asst_msg)
             
+            file_name = uploaded_file.original_name if (body.file_id and uploaded_file) else None
             # 2. Launch background task
             background_tasks.add_task(
                 process_summary_background,
                 message_id=asst_msg.id,
                 index_path=index_path,
                 mode=body.summary_mode,
-                language=body.language
+                language=body.language,
+                chat_id=chat.id,
+                user_prompt=body.content,
+                file_name=file_name
             )
             return {
                 "user_message":      {"role": "user",      "content": body.content},
@@ -168,7 +167,12 @@ async def send_message(
     asst_msg = Message(chat_id=chat.id, role="assistant", content=ai_text)
     db.add(asst_msg)
 
-
+    # Post-response Titling
+    title_clean = (chat.title or "").strip().lower()
+    if title_clean in ("new chat", "new conversation", ""):
+        from backend.services.ai_engine import generate_title
+        file_name = uploaded_file.original_name if (body.file_id and uploaded_file) else None
+        chat.title = generate_title(body.content, assistant_reply=ai_text, file_name=file_name)
 
     await db.commit()
     await db.refresh(asst_msg)
@@ -208,18 +212,17 @@ async def send_message_stream(
 
     # Resolve index path
     index_path = None
+    file_name = None
     if body.file_id:
         file_res = await db.execute(
             select(UploadedFile).where(UploadedFile.id == body.file_id, UploadedFile.user_id == current_user.id)
         )
         uf = file_res.scalar_one_or_none()
-        if uf: index_path = uf.faiss_index_path
+        if uf: 
+            index_path = uf.faiss_index_path
+            file_name = uf.original_name
 
-    # Generate title eagerly if it's a "New Chat"
-    title_clean = (chat.title or "").strip().lower()
-    if title_clean in ("new chat", "new conversation", ""):
-        chat.title = generate_title(body.content)
-        await db.commit()
+
 
     async def stream_generator():
         full_text = ""
@@ -233,11 +236,27 @@ async def send_message_stream(
                 full_text += token
                 yield token
             
-            # After stream ends, save assistant reply
-            asst_msg = Message(chat_id=chat.id, role="assistant", content=full_text)
-            db.add(asst_msg)
-            await db.commit()
+            # After stream ends, save assistant reply and update title using a fresh session
+            from backend.database import AsyncSessionLocal
+            from sqlalchemy import select
+            
+            async with AsyncSessionLocal() as fresh_db:
+                # Add the assistant message
+                asst_msg = Message(chat_id=chat.id, role="assistant", content=full_text)
+                fresh_db.add(asst_msg)
+                
+                # Fetch chat to update title
+                chat_res = await fresh_db.execute(select(Chat).where(Chat.id == chat.id))
+                fresh_chat = chat_res.scalar_one_or_none()
+                
+                if fresh_chat:
+                    title_clean = (fresh_chat.title or "").strip().lower()
+                    if title_clean in ("new chat", "new conversation", ""):
+                        fresh_chat.title = generate_title(body.content, assistant_reply=full_text, file_name=file_name)
+                
+                await fresh_db.commit()
         except Exception as e:
+            print(f"[Streaming Error]: {e}")
             yield f"\n[Streaming Error: {str(e)}]"
 
     return StreamingResponse(stream_generator(), media_type="text/plain")
