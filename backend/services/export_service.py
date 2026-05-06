@@ -1,11 +1,13 @@
 import re
+import html
+import markdown2
+from bs4 import BeautifulSoup
 from datetime import datetime, timezone
 from io import BytesIO
 
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, HRFlowable, Preformatted
 
@@ -17,25 +19,85 @@ CODE_BG      = colors.HexColor("#f8f8f8")
 CODE_BORDER  = colors.HexColor("#dddddd")
 
 
-def format_text_markup(text: str) -> str:
+def markdown_to_flowables(markdown_text, styles):
     """
-    Handle inline markdown: bold, italic, inline code.
-    Must escape special HTML characters first to avoid ReportLab parsing errors.
+    Convert markdown text into ReportLab flowables.
     """
-    # 1. Escape & first
-    text = text.replace('&', '&amp;')
-    # 2. Escape < and > only if they aren't part of our tags (very simple approach)
-    text = text.replace('<', '&lt;').replace('>', '&gt;')
+    flowables = []
+
+    # Markdown → HTML
+    html_content = markdown2.markdown(
+        markdown_text,
+        extras=["fenced-code-blocks", "tables", "strike", "task_list", "code-friendly"]
+    )
+
+    # ─── CRITICAL FIX: ReportLab Paragraph only supports <b> and <i> ────────
+    html_content = html_content.replace("<strong>", "<b>").replace("</strong>", "</b>")
+    html_content = html_content.replace("<em>", "<i>").replace("</em>", "</i>")
+
+    # Use 'html.parser' but we want to iterate over all top-level elements
+    soup = BeautifulSoup(html_content, "html.parser")
     
-    # 3. Apply Markdown -> HTML tags
-    # Bold: **text** or __text__
-    text = re.sub(r'(\*\*|__)(.*?)\1', r'<b>\2</b>', text)
-    # Italic: *text* or _text_
-    text = re.sub(r'(\*|_)(.*?)\1', r'<i>\2</i>', text)
-    # Inline code: `text`
-    text = re.sub(r'`(.*?)`', r'<font face="Courier" color="#c41261">\1</font>', text)
-    
-    return text
+    # If markdown2 produced a single block, it might not have a body, 
+    # but BeautifulSoup usually handles it. We iterate over the tags.
+    elements = soup.find_all(recursive=False)
+    if not elements and html_content.strip():
+        # Fallback if it's just a single line or weirdly parsed
+        elements = soup.contents
+
+    for element in elements:
+        # Skip empty strings / whitespace
+        if isinstance(element, str):
+            if element.strip():
+                flowables.append(Paragraph(element.strip(), styles["Normal"]))
+            continue
+
+        if element.name is None:
+            continue
+
+        # Headings
+        if element.name in ["h1", "h2", "h3"]:
+            style_name = "Heading1" if element.name == "h1" else "Heading2"
+            if element.name == "h3": style_name = "Heading3"
+            
+            # Explicitly wrap in <b> just in case the style font-switch fails
+            txt = f"<b>{element.get_text()}</b>"
+            flowables.append(Paragraph(txt, styles[style_name]))
+
+        # Paragraphs
+        elif element.name == "p":
+            inner_content = element.decode_contents().replace('\n', ' ').strip()
+            if inner_content:
+                flowables.append(Paragraph(inner_content, styles["Normal"]))
+
+        # Bullet lists
+        elif element.name == "ul":
+            for li in element.find_all("li", recursive=False):
+                # Ensure bullet dots are present and content is formatted
+                content = li.decode_contents().strip()
+                flowables.append(
+                    Paragraph(f"&bull; {content}", styles["BulletStyle"])
+                )
+
+        # Numbered lists
+        elif element.name == "ol":
+            for idx, li in enumerate(element.find_all("li", recursive=False), 1):
+                content = li.decode_contents().strip()
+                flowables.append(
+                    Paragraph(f"{idx}. {content}", styles["BulletStyle"])
+                )
+
+        # Code blocks
+        elif element.name == "pre":
+            flowables.append(Preformatted(element.get_text(), styles["CodeBlock"]))
+
+        # Horizontal rules
+        elif element.name == "hr":
+            flowables.append(HRFlowable(width="100%", thickness=1, color=colors.lightgrey))
+
+        flowables.append(Spacer(1, 4))
+
+    return flowables
 
 
 def generate_chat_pdf(chat_title: str, messages: list[dict]) -> bytes:
@@ -44,8 +106,8 @@ def generate_chat_pdf(chat_title: str, messages: list[dict]) -> bytes:
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        rightMargin=20 * mm,
-        leftMargin=20 * mm,
+        rightMargin=18 * mm,
+        leftMargin=18 * mm,
         topMargin=20 * mm,
         bottomMargin=20 * mm,
         title=f"DocuChat — {chat_title}",
@@ -54,169 +116,121 @@ def generate_chat_pdf(chat_title: str, messages: list[dict]) -> bytes:
 
     styles = getSampleStyleSheet()
 
-    # ─── Custom styles ────────────────────────────────────────────────────────
-    # Define styles explicitly using Helvetica and Helvetica-Bold
+    # ─── Adjust standard styles ──────────────────────────────────────────────
     
-    title_style = ParagraphStyle(
-        "ChatTitle",
-        parent=styles["Heading1"],
-        fontName="Helvetica-Bold",
-        fontSize=24,
-        textColor=BLACK,
-        spaceAfter=10,
+    # Normal Text
+    normal_style = styles["Normal"]
+    normal_style.fontName = "Helvetica"
+    normal_style.fontSize = 11
+    normal_style.leading = 15
+    normal_style.textColor = BLACK
+    normal_style.spaceAfter = 8
+    normal_style.allowMarkup = True
+
+    # Heading 1
+    h1_style = styles["Heading1"]
+    h1_style.fontName = "Helvetica-Bold"
+    h1_style.fontSize = 20
+    h1_style.leading = 24
+    h1_style.textColor = BLACK
+    h1_style.spaceBefore = 14
+    h1_style.spaceAfter = 10
+    h1_style.allowMarkup = True
+
+    # Heading 2
+    h2_style = styles["Heading2"]
+    h2_style.fontName = "Helvetica-Bold"
+    h2_style.fontSize = 16
+    h2_style.leading = 20
+    h2_style.textColor = BLACK
+    h2_style.spaceBefore = 12
+    h2_style.spaceAfter = 8
+    h2_style.allowMarkup = True
+
+    # Heading 3
+    h3_style = styles["Heading3"]
+    h3_style.fontName = "Helvetica-Bold"
+    h3_style.fontSize = 13
+    h3_style.leading = 16
+    h3_style.textColor = BLACK
+    h3_style.spaceBefore = 10
+    h3_style.spaceAfter = 6
+    h3_style.allowMarkup = True
+
+    # Bullet point style
+    styles.add(
+        ParagraphStyle(
+            name="BulletStyle",
+            parent=normal_style,
+            leftIndent=20,
+            bulletIndent=10,
+            spaceAfter=6,
+            allowMarkup=True
+        )
     )
-    
-    subtitle_style = ParagraphStyle(
-        "Subtitle",
-        parent=styles["Normal"],
-        fontName="Helvetica",
-        fontSize=10,
-        textColor=GREY,
-        spaceAfter=15,
+
+    # Code block style
+    styles.add(
+        ParagraphStyle(
+            name="CodeBlock",
+            fontName="Courier",
+            fontSize=10,
+            leading=13,
+            backColor=CODE_BG,
+            borderPadding=10,
+            borderRadius=4,
+            borderWidth=0.5,
+            borderColor=CODE_BORDER,
+            leftIndent=10,
+            rightIndent=10,
+            spaceBefore=10,
+            spaceAfter=10
+        )
     )
-    
-    label_style_user = ParagraphStyle(
+
+    # Custom Label styles
+    label_user_style = ParagraphStyle(
         "LabelUser",
-        parent=styles["Normal"],
         fontName="Helvetica-Bold",
         fontSize=10,
         textColor=ACCENT_COLOR,
-        spaceBefore=12,
-        spaceAfter=4,
+        spaceBefore=15,
+        spaceAfter=5
     )
     
-    label_style_asst = ParagraphStyle(
+    label_asst_style = ParagraphStyle(
         "LabelAsst",
-        parent=styles["Normal"],
         fontName="Helvetica-Bold",
         fontSize=10,
         textColor=GREY,
-        spaceBefore=12,
-        spaceAfter=4,
-    )
-
-    normal_text_style = ParagraphStyle(
-        "NormalText",
-        parent=styles["Normal"],
-        fontName="Helvetica",
-        fontSize=11,
-        textColor=BLACK,
-        leading=16,
-        spaceAfter=10,
-    )
-    
-    h1_style = ParagraphStyle(
-        "H1",
-        parent=styles["Heading1"],
-        fontName="Helvetica-Bold",
-        fontSize=16,
-        textColor=BLACK,
-        spaceBefore=12,
-        spaceAfter=6,
-    )
-    
-    h2_style = ParagraphStyle(
-        "H2",
-        parent=styles["Heading2"],
-        fontName="Helvetica-Bold",
-        fontSize=14,
-        textColor=BLACK,
-        spaceBefore=10,
-        spaceAfter=4,
-    )
-    
-    bullet_item_style = ParagraphStyle(
-        "BulletItem",
-        parent=styles["Normal"],
-        fontName="Helvetica",
-        fontSize=11,
-        textColor=BLACK,
-        leading=16,
-        leftIndent=20,
-        firstLineIndent=0,
-        spaceAfter=6,
-    )
-    
-    code_block_style = ParagraphStyle(
-        "CodeBlock",
-        parent=styles["Normal"],
-        fontName="Courier",
-        fontSize=10,
-        textColor=BLACK,
-        backColor=CODE_BG,
-        borderPadding=10,
-        borderRadius=4,
-        borderWidth=0.5,
-        borderColor=CODE_BORDER,
-        leading=13,
-        leftIndent=10,
-        rightIndent=10,
-        spaceBefore=10,
-        spaceAfter=10,
+        spaceBefore=15,
+        spaceAfter=5
     )
 
     # ─── Build story ─────────────────────────────────────────────────────────
     story = []
 
-    # Header
-    story.append(Paragraph("DocuChat", title_style))
+    # Branding Header
+    story.append(Paragraph("<b>DocuChat Export</b>", h1_style))
     story.append(Paragraph(
-        f"Conversation: <b>{chat_title}</b> &nbsp;|&nbsp; Exported: "
-        f"{datetime.now(timezone.utc).strftime('%B %d, %Y %H:%M UTC')}",
-        subtitle_style,
+        f"Conversation: <b>{html.escape(chat_title)}</b> &nbsp;|&nbsp; "
+        f"Exported: {datetime.now(timezone.utc).strftime('%B %d, %Y %H:%M UTC')}",
+        styles["Normal"]
     ))
-    story.append(HRFlowable(width="100%", thickness=1, color=colors.black, spaceAfter=20))
+    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.black, spaceAfter=20))
 
     for msg in messages:
         role = msg.get("role", "user")
-        raw_content = msg.get("content", "")
+        content = msg.get("content", "")
 
-        # Role Label
+        # Sender Label
         label = "You" if role == "user" else "DocuChat AI"
-        story.append(Paragraph(label, label_style_user if role == "user" else label_style_asst))
+        story.append(Paragraph(label, label_user_style if role == "user" else label_asst_style))
 
-        # 1. Extract Code Blocks
-        parts = re.split(r'```(?:.*?)\n?(.*?)```', raw_content, flags=re.DOTALL)
-        
-        for i, part in enumerate(parts):
-            if i % 2 == 1:
-                # Code Block
-                story.append(Preformatted(part.strip(), code_block_style))
-            else:
-                # Normal text - split into lines for headings and lists
-                lines = part.split('\n')
-                for line in lines:
-                    s_line = line.strip()
-                    if not s_line:
-                        story.append(Spacer(1, 2))
-                        continue
+        # Use the robust markdown flowable generator
+        story.extend(markdown_to_flowables(content, styles))
 
-                    # Markdown Headings
-                    if s_line.startswith('### '):
-                        story.append(Paragraph(format_text_markup(s_line[4:]), h2_style))
-                    elif s_line.startswith('## '):
-                        story.append(Paragraph(format_text_markup(s_line[3:]), h1_style))
-                    elif s_line.startswith('# '):
-                        story.append(Paragraph(format_text_markup(s_line[2:]), h1_style))
-                    
-                    # Bullet Lists
-                    elif s_line.startswith('- ') or s_line.startswith('* ') or s_line.startswith('+ '):
-                        # Use a proper bullet point
-                        bullet_txt = f"&bull; {format_text_markup(s_line[2:])}"
-                        story.append(Paragraph(bullet_txt, bullet_item_style))
-                    
-                    # Numbered Lists
-                    elif re.match(r'^\d+\. ', s_line):
-                        story.append(Paragraph(format_text_markup(s_line), bullet_item_style))
-                    
-                    # Standard Paragraph
-                    else:
-                        story.append(Paragraph(format_text_markup(line), normal_text_style))
-
-        story.append(Spacer(1, 8))
+        story.append(Spacer(1, 10))
 
     doc.build(story)
     return buffer.getvalue()
-
-
-
