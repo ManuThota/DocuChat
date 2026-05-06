@@ -102,9 +102,13 @@ export function initSidebar({ listEl, searchInput, getActiveChatId, showToast, o
         const id    = parseInt(el.dataset.id, 10);
         if (id === getActiveChatId()) return; // Don't reload the same chat
         const title = el.dataset.title;
-        setActive(id);
-        onChatSelect(id, title);
-        if (filteredOverlay) filteredOverlay.classList.remove('open');
+        
+        // dashboard.js can return false to prevent switching (e.g. during selection mode)
+        const allowed = onChatSelect(id, title);
+        if (allowed !== false) {
+          setActive(id);
+          if (filteredOverlay) filteredOverlay.classList.remove('open');
+        }
       });
     });
 

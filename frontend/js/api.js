@@ -191,8 +191,11 @@ export const UploadAPI = {
 // ─── Export ───────────────────────────────────────────────────────────────
 
 export const ExportAPI = {
-  exportPDF: (chat_id) =>
-    apiFetch('/export/pdf', { method: 'POST', body: JSON.stringify({ chat_id }) }),
+  exportPDF: (chat_id, messages = null, filename = null) =>
+    apiFetch('/export/pdf', { 
+      method: 'POST', 
+      body: JSON.stringify({ chat_id, messages, filename }) 
+    }),
 };
 
 // ─── User ─────────────────────────────────────────────────────────────────

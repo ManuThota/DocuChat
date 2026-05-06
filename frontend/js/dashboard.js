@@ -163,7 +163,7 @@ if (inputArea && chatWindow) {
   const updateLayout = () => {
     const height = inputArea.offsetHeight;
     // Set padding enough to clear the input area plus extra breathing room
-    chatWindow.style.paddingBottom = `${height + 40}px`;
+    chatWindow.style.paddingBottom = `${height + 10}px`;
     scrollToBottom(true);
   };
 
@@ -545,7 +545,13 @@ const sidebar = initSidebar({
   searchInput:     document.getElementById('chatSearchInput'),
   getActiveChatId: () => activeChatId,
   showToast,
-  onChatSelect:    (id, title) => loadChat(id, title),
+  onChatSelect:    (id, title) => {
+    if (document.body.classList.contains('selection-mode')) {
+      showToast('Please select the messages in this chat or cancel selection mode first.', 'warning');
+      return false;
+    }
+    loadChat(id, title);
+  },
   onChatDelete:    (id)        => { if (activeChatId === id) resetChatView(); },
 });
 
@@ -762,7 +768,15 @@ async function sendMessage() {
         }
       }
       
-      await streamPromise; // Ensure any errors are caught
+      await streamPromise; 
+      
+      // Update sidebar and title immediately after stream finishes
+      await sidebar.refresh();
+      sidebar.setActive(activeChatId);
+      const updatedChat = await ChatAPI.getChat(activeChatId);
+      if (updatedChat && updatedChat.title) {
+        chatTitle.textContent = updatedChat.title;
+      }
     }
 
     // After completion, update UI state
@@ -922,7 +936,114 @@ document.addEventListener('click', (e) => {
 
 // ─── Export PDF ───────────────────────────────────────────────────────────
 if (exportBtn) {
-  exportBtn.addEventListener('click', () => exportChatPDF(activeChatId, showToast));
+  exportBtn.addEventListener('click', () => {
+    const exportOverlay = document.getElementById('exportOverlay');
+    const exportFilenameInput = document.getElementById('exportFilename');
+    const scopeSelect = document.getElementById('scopeSelect');
+    const scopeDropdownText = document.querySelector('#scopeDropdown .sel-text');
+
+    if (exportOverlay) exportOverlay.classList.add('open');
+    if (exportFilenameInput) {
+      exportFilenameInput.value = chatTitle.textContent || 'Exported Chat';
+      exportFilenameInput.select(); // Highlight the text for easy editing
+    }
+    // Always default to 'Entire Chat' when opening the modal
+    if (scopeSelect) scopeSelect.value = 'entire';
+    if (scopeDropdownText) scopeDropdownText.textContent = 'Entire Chat';
+  });
+}
+
+// Scope Toggle Logic no longer needed as it's handled by generic dropdown logic in JS
+// We just need to read the hidden input value in the exportConfirm listener.
+
+const exportCancel  = document.getElementById('exportCancel');
+const exportConfirm = document.getElementById('exportConfirm');
+const exportOverlay = document.getElementById('exportOverlay');
+
+if (exportCancel && exportOverlay) {
+  exportCancel.addEventListener('click', () => exportOverlay.classList.remove('open'));
+}
+
+let selectionModeActive = false;
+let selectedMessages = [];
+
+if (exportConfirm && exportOverlay) {
+  exportConfirm.addEventListener('click', async () => {
+    const filename = document.getElementById('exportFilename').value;
+    const scopeSelect = document.getElementById('scopeSelect');
+    const currentExportScope = scopeSelect ? scopeSelect.value : 'entire';
+    
+    if (currentExportScope === 'entire') {
+      exportOverlay.classList.remove('open');
+      await exportChatPDF(activeChatId, showToast, null, filename);
+    } else {
+      // Start Selective Mode
+      exportOverlay.classList.remove('open');
+      selectionModeActive = true;
+      selectedMessages = [];
+      selectedCount.textContent = '0';
+      document.body.classList.add('selection-mode');
+      selectionToolbar.style.display = 'flex';
+      showToast('Click messages to select them', 'info');
+    }
+  });
+}
+
+const selectionToolbar = document.getElementById('selectionToolbar');
+const cancelSelectionBtn = document.getElementById('cancelSelectionBtn');
+const confirmSelectionExportBtn = document.getElementById('confirmSelectionExportBtn');
+const selectedCount = document.getElementById('selectedCount');
+
+if (cancelSelectionBtn) {
+  cancelSelectionBtn.addEventListener('click', () => {
+    selectionModeActive = false;
+    document.body.classList.remove('selection-mode');
+    selectionToolbar.style.display = 'none';
+    document.querySelectorAll('.message.selected').forEach(m => m.classList.remove('selected'));
+  });
+}
+
+if (confirmSelectionExportBtn) {
+  confirmSelectionExportBtn.addEventListener('click', async () => {
+    if (selectedMessages.length === 0) {
+      showToast('Select at least one message', 'warning');
+      return;
+    }
+    const filename = document.getElementById('exportFilename').value;
+    await exportChatPDF(activeChatId, showToast, selectedMessages, filename);
+    
+    // Exit selection mode
+    selectionModeActive = false;
+    document.body.classList.remove('selection-mode');
+    selectionToolbar.style.display = 'none';
+    document.querySelectorAll('.message.selected').forEach(m => m.classList.remove('selected'));
+  });
+}
+
+// Handle message selection click
+if (chatInner) {
+  chatInner.addEventListener('click', (e) => {
+    if (!selectionModeActive) return;
+    
+    const messageEl = e.target.closest('.message');
+    if (!messageEl) return;
+    
+    const role = messageEl.classList.contains('user') ? 'user' : 'assistant';
+    const content = messageEl.querySelector('.msg-bubble').innerText;
+    
+    const msgObj = { role, content };
+    const index = selectedMessages.findIndex(m => m.content === content && m.role === role);
+    
+    if (index > -1) {
+      selectedMessages.splice(index, 1);
+      messageEl.classList.remove('selected');
+    } else {
+      selectedMessages.push(msgObj);
+      messageEl.classList.add('selected');
+    }
+    
+    selectedCount.textContent = selectedMessages.length;
+  });
 }
 
 // ─── Settings modal ───────────────────────────────────────────────────────

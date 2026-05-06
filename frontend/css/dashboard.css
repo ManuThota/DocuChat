@@ -1746,3 +1746,154 @@ input:disabled + .toggle-slider {
   50% { transform: scale(1.02); opacity: 1; }
   100% { transform: scale(1); opacity: 0.7; }
 }
+
+/* ─── Selection Mode Styles ────────────────────────────────────────────── */
+.selection-mode .options-bar,
+.selection-mode .input-box-wrapper,
+.selection-mode .drop-zone,
+.selection-mode .input-footer {
+  display: none !important;
+}
+
+.selection-mode .message {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  padding: 8px;
+  border-radius: 12px;
+}
+
+.selection-mode .message:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.selection-mode .message.selected {
+  background: rgba(124, 111, 253, 0.15);
+  border: 1px solid var(--accent);
+}
+
+.selection-mode .message.selected::after {
+  content: '✓';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: var(--accent);
+  color: #fff;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.selection-toolbar {
+  position: absolute; /* Anchor relative to main-area */
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(18, 18, 18, 0.5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 30px;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  z-index: 6000;
+  max-width: fit-content;
+  animation: fade-in 0.3s ease;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.selection-info {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.selection-actions {
+  display: flex;
+  gap: 12px;
+}
+
+#confirmSelectionExportBtn {
+  background: #fff !important;
+  color: #000 !important;
+  border: 1px solid #fff !important;
+  transition: all 0.2s ease !important;
+  font-weight: 600 !important;
+}
+
+#confirmSelectionExportBtn:hover {
+  background: #000 !important;
+  color: #fff !important;
+  border-color: #333 !important;
+}
+
+#cancelSelectionBtn {
+  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+}
+
+#cancelSelectionBtn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+
+
+.scope-btn.active {
+  background: var(--accent) !important;
+  color: #fff !important;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(124, 111, 253, 0.3);
+}
+
+.scope-btn:not(.active) {
+  color: var(--text-muted);
+}
+
+.scope-btn:not(.active):hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+/* ─── Export Action Refinements ─────────────────────────────────────────── */
+.export-action-btn {
+  background: #000 !important;
+  color: #fff !important;
+  border: 1px solid #333 !important;
+  padding: 10px 32px !important;
+  transition: all 0.2s ease !important;
+}
+
+.export-action-btn:hover {
+  background: #fff !important;
+  color: #000 !important;
+  border-color: #fff !important;
+}
+
+.export-scope-item {
+  background: #000 !important;
+  color: #fff !important;
+  transition: all 0.2s ease !important;
+}
+
+.export-scope-item:hover {
+  background: #fff !important;
+  color: #000 !important;
+}
+
+
+

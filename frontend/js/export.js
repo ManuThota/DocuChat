@@ -16,7 +16,7 @@ import { ExportAPI } from './api.js';
  * @param {number|null} chatId
  * @param {Function} showToast - showToast(message, type) function
  */
-export async function exportChatPDF(chatId, showToast) {
+export async function exportChatPDF(chatId, showToast, messages = null, filename = null) {
   if (!chatId) {
     showToast('No active chat to export', 'warning');
     return;
@@ -25,19 +25,24 @@ export async function exportChatPDF(chatId, showToast) {
   showToast('Generating PDF…', 'info');
 
   try {
-    const blob = await ExportAPI.exportPDF(chatId);
+    const blob = await ExportAPI.exportPDF(chatId, messages, filename);
 
     // Trigger download
     const url  = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href     = url;
-    link.download = `docuchat_${chatId}.pdf`;
+    
+    // Ensure filename has .pdf extension
+    let finalName = filename || `docuchat_${chatId}`;
+    if (!finalName.toLowerCase().endsWith('.pdf')) finalName += '.pdf';
+    
+    link.download = finalName;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    showToast('✅ PDF downloaded!', 'success');
+    showToast('PDF downloaded!', 'success');
   } catch (err) {
     showToast(`Export failed: ${err.message}`, 'error');
   }

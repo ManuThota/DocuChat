@@ -22,6 +22,8 @@ router = APIRouter(prefix="/export", tags=["Export"])
 
 class ExportPDFRequest(BaseModel):
     chat_id: int
+    messages: list[dict] | None = None
+    filename: str | None = None
 
 
 @router.post("/pdf")
@@ -31,11 +33,11 @@ async def export_pdf(
     db:           AsyncSession    = Depends(get_db),
 ):
     """
-    Generate a styled PDF of the requested chat and return it as a download.
+    Generate a styled PDF of the requested chat (optionally just selected messages) 
+    and return it as a download.
     """
     result = await db.execute(
         select(Chat)
-        .options(selectinload(Chat.messages))
         .where(Chat.id == body.chat_id, Chat.user_id == current_user.id)
     )
     chat = result.scalar_one_or_none()
@@ -43,14 +45,26 @@ async def export_pdf(
     if chat is None:
         raise HTTPException(status_code=404, detail="Chat not found.")
 
-    messages = [
-        {"role": m.role, "content": m.content}
-        for m in chat.messages
-    ]
+    # Use provided messages if present, otherwise fetch all from chat
+    if body.messages is not None:
+        messages = body.messages
+    else:
+        # Fetch all messages from the DB
+        result_msg = await db.execute(
+            select(Chat).options(selectinload(Chat.messages)).where(Chat.id == body.chat_id)
+        )
+        full_chat = result_msg.scalar_one()
+        messages = [
+            {"role": m.role, "content": m.content}
+            for m in full_chat.messages
+        ]
 
     pdf_bytes = generate_chat_pdf(chat.title, messages)
 
-    filename = f"docuchat_{chat.id}.pdf"
+    filename = body.filename or f"docuchat_{chat.id}.pdf"
+    if not filename.endswith(".pdf"):
+        filename += ".pdf"
+
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",

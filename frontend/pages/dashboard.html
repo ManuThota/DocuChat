@@ -160,6 +160,17 @@
     <!-- ═══ MAIN AREA ══════════════════════════════════════════════════════════ -->
     <main class="main-area">
 
+      <!-- Selection Mode Toolbar (Placed here for perfect centering relative to main-area) -->
+      <div class="selection-toolbar" id="selectionToolbar" style="display: none;">
+        <div class="selection-info">
+          <span id="selectedCount">0</span> selected
+        </div>
+        <div class="selection-actions">
+          <button class="btn btn-ghost" id="cancelSelectionBtn" style="padding: 6px 16px; font-size: 13px;">Cancel</button>
+          <button class="btn" id="confirmSelectionExportBtn" style="padding: 6px 20px; font-size: 13px;">Export Selected</button>
+        </div>
+      </div>
+
       <!-- Topbar -->
       <div class="topbar">
         <div class="topbar-title" id="chatTitle"></div>
@@ -375,6 +386,54 @@
       </div>
     </div>
   </div>
+
+  <!-- Export Confirmation Modal -->
+  <div class="chat-action-overlay" id="exportOverlay">
+    <div class="chat-action-modal">
+      <div class="chat-action-icon-circle" style="color: var(--accent);">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+      </div>
+      <p class="chat-action-title">Export PDF</p>
+      <p class="chat-action-sub" style="margin-bottom: 12px;">Configure your document settings.</p>
+      
+      <div style="width: 100%; margin: 8px 0 16px;">
+        <label style="display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px; text-align: left;">Filename</label>
+        <input type="text" id="exportFilename" placeholder="Enter filename" 
+               style="width: 100%; padding: 8px 12px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; color: #fff; font-size: 14px; outline: none;">
+      </div>
+
+      <div style="width: 100%; margin-bottom: 24px; display: flex; flex-direction: column; align-items: center;">
+        <label style="display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 6px; text-align: center;">Export Scope</label>
+        <div class="custom-dropdown" id="scopeDropdown" style="width: 170px;">
+          <div class="dropdown-selected" style="justify-content: space-between; background: var(--bg-elevated); border: 1px solid var(--border); padding: 8px 12px; border-radius: 8px;">
+            <span class="sel-text">Entire Chat</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+          <div class="dropdown-options" style="width: 100%; top: 100%; background: #000; border: 1px solid #333; text-align: left;">
+            <div class="dropdown-item export-scope-item" data-value="entire" style="color: #fff; padding: 8px 12px; text-align: left;">Entire Chat</div>
+            <div class="dropdown-item export-scope-item" data-value="selective" style="color: #fff; padding: 8px 12px; text-align: left;">Select Messages</div>
+          </div>
+          <input type="hidden" id="scopeSelect" value="entire">
+        </div>
+      </div>
+
+      <div class="chat-action-buttons" style="gap: 12px; justify-content: flex-end;">
+        <button class="btn btn-ghost" id="exportCancel" style="padding: 10px 24px; border: 1px solid var(--border);">Cancel</button>
+        <button class="btn export-action-btn" id="exportConfirm">Export</button>
+      </div>
+    </div>
+  </div>
+
+      <!-- Input Area -->
+      <div class="input-area">
+        <div class="input-toolbar">
+
+
 
   <!-- Logout Confirmation Modal -->
   <div class="chat-action-overlay" id="logoutOverlay">
