@@ -575,7 +575,7 @@ def generate_title(user_message: str, assistant_reply: str = "") -> str:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a professional titling expert. Generate a concise, catchy title (maximum 3 words) based on the context. Return ONLY the title text. Do NOT include prefixes like 'Title:', 'Chat:', or any quotes or punctuation. If the user asks for a document summary but no document is provided, just return 'Document Summary'. NEVER complain, write full sentences, or output error messages."
+                    "content": "You are a professional titling expert. Generate a concise, catchy title (maximum 3 words) based on the context. Return ONLY the title text. Do NOT include prefixes like 'Title:', 'Chat:', or any quotes or punctuation."
                 },
                 {"role": "user", "content": content_prompt},
             ],
