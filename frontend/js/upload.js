@@ -201,7 +201,12 @@ export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, ac
     
     // 1. Render from cache immediately for zero-lag feel
     if (docCache[chatId]) {
-      renderDocCards(docCache[chatId], chatId);
+      const cached = docCache[chatId];
+      if (cached.length === 0) {
+        filesPanel.innerHTML = '<div class="doc-empty">No documents in this chat yet.</div>';
+      } else {
+        renderDocCards(cached, chatId);
+      }
     }
 
     try {

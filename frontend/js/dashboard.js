@@ -565,8 +565,14 @@ async function savePersonalization() {
 
 if (savePersonalizationBtn) {
   savePersonalizationBtn.addEventListener('click', async () => {
-    await savePersonalization();
-    showToast('Preferences applied successfully!', 'success');
+    // Close immediately for instant feel
+    personalizationOverlay.classList.remove('open');
+    try {
+      await savePersonalization();
+      showToast('Preferences applied successfully!', 'success');
+    } catch (err) {
+      // toast shown in savePersonalization
+    }
   });
 }
 
@@ -864,8 +870,12 @@ async function sendMessage() {
     try {
       const chatData = await ChatAPI.getChat(activeChatId);
       if (chatData && chatData.title && chatData.title !== 'New Chat') {
-        chatTitle.textContent = chatData.title;
-        // sidebar.refresh() already updated the sidebar item
+        // Only update if it's not a generic "Initial Greeting" or similar downgrade
+        const isGeneric = ['initial greeting', 'greeting', 'start conversation'].includes(chatData.title.toLowerCase());
+        if (!isGeneric || chatTitle.textContent === 'New Chat') {
+          chatTitle.textContent = chatData.title;
+          sidebar.updateChatTitleOptimistically(activeChatId, chatData.title);
+        }
       }
     } catch (e) {
       console.error("Failed to update chat header:", e);
