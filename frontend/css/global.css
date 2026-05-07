@@ -199,6 +199,13 @@ p { color: var(--text-secondary); }
   max-width: 320px;
   text-align: center;
 }
+
+[data-theme="light"] .toast {
+  background: #fff;
+  color: #000;
+  border: 1px solid rgba(0,0,0,0.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
 .toast.info    { border-left: none; }
 .toast.success { border-left: none; }
 .toast.error   { border-left: none; }
