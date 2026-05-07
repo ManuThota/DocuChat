@@ -59,8 +59,8 @@ async def init_db() -> None:
             pass # Already exists
 
         try:
-            await conn.execute(text("ALTER TABLE users ADD COLUMN profession VARCHAR(100)"))
-            print("Added 'profession' column to 'users'")
+            await conn.execute(text("ALTER TABLE user_preferences ADD COLUMN auto_delete_docs BOOLEAN DEFAULT 0"))
+            print("Added 'auto_delete_docs' column to 'user_preferences'")
         except Exception:
             pass # Already exists
     

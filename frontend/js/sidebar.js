@@ -215,14 +215,14 @@ export function initSidebar({ listEl, searchInput, getActiveChatId, showToast, o
       actionSub.textContent   = 'Move this conversation to your archive. You can still access it later.';
       actionIcon.innerHTML    = ICONS.archive;
       actionIcon.style.color  = 'var(--text-primary)';
-      actionConfirm.className = 'btn btn-primary';
+      actionConfirm.className = 'btn btn-outline-white';
       actionConfirm.textContent = 'Archive Chat';
     } else {
       actionTitle.textContent = 'Hide Chat?';
       actionSub.textContent   = 'Remove this conversation from your list. It won\'t be deleted.';
       actionIcon.innerHTML    = ICONS.hide;
       actionIcon.style.color  = 'var(--text-secondary)';
-      actionConfirm.className = 'btn btn-primary';
+      actionConfirm.className = 'btn btn-outline-white';
       actionConfirm.textContent = 'Hide Chat';
     }
 

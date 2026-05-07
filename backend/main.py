@@ -19,6 +19,8 @@ from fastapi.staticfiles import StaticFiles
 from backend.config import get_settings
 from backend.database import init_db
 from backend.routers import auth, chat, upload, export, user
+from backend.services.cleanup_service import auto_delete_old_documents
+import asyncio
 
 settings = get_settings()
 
@@ -30,6 +32,10 @@ async def lifespan(app: FastAPI):
     await init_db()
     # Create uploads directory
     os.makedirs(settings.upload_dir, exist_ok=True)
+    
+    # Start background cleanup task
+    asyncio.create_task(auto_delete_old_documents())
+    
     print("DocuChat API is ready.")
     yield
     print("DocuChat API is shutting down.")

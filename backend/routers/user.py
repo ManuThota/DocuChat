@@ -21,11 +21,11 @@ from backend.models.user import User, UserPreferences
 settings = get_settings()
 router = APIRouter(prefix="/user", tags=["User"])
 
-
 class PreferencesUpdate(BaseModel):
-    language:     str | None = None
-    theme:        str | None = None
-    summary_mode: str | None = None
+    language:         str | None = None
+    theme:            str | None = None
+    summary_mode:     str | None = None
+    auto_delete_docs: bool | None = None
 
 
 from backend.utils.security import verify_password, hash_password
@@ -59,9 +59,10 @@ async def get_profile(
         "profession": user.profession,
         "created_at": user.created_at.isoformat(),
         "preferences": {
-            "language":     prefs.language     if prefs else "English",
-            "theme":        prefs.theme        if prefs else "dark",
-            "summary_mode": prefs.summary_mode if prefs else "short",
+            "language":         prefs.language         if prefs else "English",
+            "theme":            prefs.theme            if prefs else "dark",
+            "summary_mode":     prefs.summary_mode     if prefs else "short",
+            "auto_delete_docs": prefs.auto_delete_docs if prefs else False,
         },
     }
 
@@ -123,16 +124,17 @@ async def update_preferences(
         prefs.language = body.language
     if body.theme is not None:
         prefs.theme = body.theme
-    if body.summary_mode is not None:
-        prefs.summary_mode = body.summary_mode
+    if body.auto_delete_docs is not None:
+        prefs.auto_delete_docs = body.auto_delete_docs
 
     await db.commit()
     await db.refresh(prefs)
 
     return {
-        "language":     prefs.language,
-        "theme":        prefs.theme,
-        "summary_mode": prefs.summary_mode,
+        "language":         prefs.language,
+        "theme":            prefs.theme,
+        "summary_mode":     prefs.summary_mode,
+        "auto_delete_docs": prefs.auto_delete_docs,
     }
 @router.delete("/", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user_account(

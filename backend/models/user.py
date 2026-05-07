@@ -83,6 +83,7 @@ class UserPreferences(Base):
     )
     language:     Mapped[str] = mapped_column(String(20), default="English")
     theme:        Mapped[str] = mapped_column(String(10), default="dark")
-    summary_mode: Mapped[str] = mapped_column(String(30), default="short")
+    summary_mode:     Mapped[str]  = mapped_column(String(30), default="short")
+    auto_delete_docs: Mapped[bool] = mapped_column(Boolean, default=False)
 
     user: Mapped[User] = relationship("User", back_populates="preferences")

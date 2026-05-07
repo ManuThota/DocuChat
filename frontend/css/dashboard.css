@@ -377,25 +377,47 @@
   border-color: #ff4d4d;
 }
 /* --- Danger Buttons (Delete/Logout/Discard) --- */
+/* --- Base Confirm Button Reset (Anti-Flicker) --- */
+#chatActionConfirm,
+#docDeleteConfirm {
+  background: var(--btn-fill, transparent) !important;
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s, border-color 0.2s;
+}
+
+/* --- Danger Buttons (Delete/Logout/Discard) --- */
 .btn-danger, 
 #chatActionConfirm.btn-danger, 
 #docDeleteConfirm.btn-danger,
 #deleteUserConfirm.btn-danger {
-  background: transparent !important;
   color: #ff3b3b !important;
   border: 1.5px solid #ff3b3b !important;
   box-shadow: none !important;
-  transition: all 0.2s ease-in-out;
 }
 
 .btn-danger:hover, 
 #chatActionConfirm.btn-danger:hover, 
 #docDeleteConfirm.btn-danger:hover,
 #deleteUserConfirm.btn-danger:hover {
-  background: #ff3b3b !important;
+  --btn-fill: #ff3b3b;
   color: #ffffff !important;
   border-color: #ff3b3b !important;
   box-shadow: 0 0 15px rgba(255, 59, 59, 0.4) !important;
+}
+
+/* --- Action Buttons (Archive/Hide) --- */
+.btn-outline-white,
+#chatActionConfirm.btn-outline-white {
+  color: #ffffff !important;
+  border: 1.5px solid #ffffff !important;
+  box-shadow: none !important;
+}
+
+.btn-outline-white:hover,
+#chatActionConfirm.btn-outline-white:hover {
+  --btn-fill: #ffffff;
+  color: #000000 !important;
+  border-color: #ffffff !important;
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.2) !important;
 }
 .menu-item.danger:hover svg {
   stroke: #fff;

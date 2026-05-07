@@ -510,8 +510,9 @@ async function savePersonalization() {
   
   try {
     await UserAPI.updatePreferences({
-      theme: current.theme,
-      summary_mode: current.summary
+      theme:            current.theme,
+      summary_mode:     current.summary,
+      auto_delete_docs: current.privacyDelete
     });
   } catch (err) {
     showToast('Failed to save preferences to backend', 'error');
