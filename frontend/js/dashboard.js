@@ -156,6 +156,27 @@ if (logoutBtn && logoutOverlay) {
       Auth.logout();
     });
   }
+
+  // --- About Modal Logic ---
+  const menuAboutBtn = document.getElementById('menuAboutBtn');
+  const aboutOverlay = document.getElementById('aboutModalOverlay');
+  const closeAboutBtn = document.getElementById('closeAboutModal');
+
+  if (menuAboutBtn && aboutOverlay) {
+    menuAboutBtn.addEventListener('click', () => {
+      userMenuPopup.classList.remove('show');
+      aboutOverlay.classList.add('open');
+    });
+  }
+
+  if (closeAboutBtn && aboutOverlay) {
+    closeAboutBtn.addEventListener('click', () => {
+      aboutOverlay.classList.remove('open');
+    });
+    aboutOverlay.addEventListener('click', (e) => {
+      if (e.target === aboutOverlay) aboutOverlay.classList.remove('open');
+    });
+  }
 }
 
 // ─── Adaptive Layout Logic ───────────────────────────────────────────────

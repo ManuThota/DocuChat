@@ -93,7 +93,6 @@
             </svg>
             Personalization
           </button>
-          <div class="menu-divider"></div>
           <div class="menu-submenu-parent">
             <button class="menu-item" id="menuChatsToggle">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -128,7 +127,15 @@
               </button>
             </div>
           </div>
-          <div class="menu-divider"></div>
+          <button class="menu-item" id="menuAboutBtn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
+            </svg>
+            About
+          </button>
           <button class="menu-item danger" id="logoutBtn">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -834,6 +841,46 @@
         <button class="btn" id="discardChangesBtn"
           style="background: var(--error); color: #fff; border: none;">Discard</button>
         <button class="btn btn-primary" id="saveAndCloseBtn">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- About DocuChat Modal -->
+  <div class="chat-action-overlay" id="aboutModalOverlay">
+    <div class="chat-action-modal" style="width: 420px; padding: 32px; text-align: center;">
+      <div class="chat-action-icon-circle" style="background: rgba(124, 111, 253, 0.1); color: #7c6ffd; margin-bottom: 24px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+          <line x1="12" y1="17" x2="12.01" y2="17" />
+        </svg>
+      </div>
+      <h3 style="margin: 0 0 12px; font-size: 22px; font-weight: 700;">About DocuChat</h3>
+      <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 16px; text-align: justify;">
+        DocuChat is a professional AI document companion designed to help you interact with your files effortlessly. 
+        Using state-of-the-art RAG technology, it enables deep conversation and analysis across PDFs, documents, and images 
+        while keeping your data secure and private.
+      </p>
+      <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 24px; text-align: justify; opacity: 0.8;">
+        If you encounter any bugs or would like to contribute enhancements, please feel free to reach out via GitHub or Email.
+      </p>
+      
+      <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 24px; text-align: left;">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+          <a href="https://github.com/ManuThota/DocuChat" target="_blank" class="about-link" style="font-size: 13px; font-weight: 500;">ManuThota/DocuChat</a>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+          <a href="mailto:manikantathota2003@gmail.com" class="about-link" style="font-size: 13px; font-weight: 500;">manikantathota2003@gmail.com</a>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: center;">
+        <button class="btn btn-outline-white" id="closeAboutModal" style="width: 120px; justify-content: center; height: 40px; font-weight: 600; font-size: 13px;">
+          Got it!
+        </button>
       </div>
     </div>
   </div>

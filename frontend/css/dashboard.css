@@ -433,7 +433,9 @@
 #chatActionConfirm.btn-outline-white {
   color: #ffffff !important;
   border: 1.5px solid #ffffff !important;
+  background: var(--btn-fill, transparent) !important;
   box-shadow: none !important;
+  transition: all 0.2s;
 }
 
 .btn-outline-white:hover,
@@ -1391,6 +1393,20 @@
 
 [data-theme="light"] .chat-action-icon-circle svg {
   color: #000;
+}
+
+.about-link {
+  color: var(--accent);
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+[data-theme="light"] .about-link {
+  color: #000000 !important;
+}
+
+.about-link:hover {
+  opacity: 0.8;
 }
 
 .chat-action-title {
