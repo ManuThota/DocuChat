@@ -308,6 +308,11 @@ document.addEventListener('click', () => {
 
 if (menuProfileBtn) {
   menuProfileBtn.addEventListener('click', async () => {
+    // 1. Open immediately for instant feel
+    profileOverlay.classList.add('open');
+    userMenuPopup.classList.remove('show');
+    
+    // 2. Load data in background
     try {
       const profile = await UserAPI.getProfile();
       initialProfileState = { 
@@ -323,9 +328,10 @@ if (menuProfileBtn) {
       
       // Reset advanced section
       if (advancedMenu) advancedMenu.style.display = 'none';
+      if (advancedOptionsBtn) advancedOptionsBtn.querySelector('svg').style.transform = 'rotate(0)';
       
-      profileOverlay.classList.add('open');
     } catch (err) {
+      profileOverlay.classList.remove('open');
       showToast('Failed to load profile', 'error');
     }
   });
@@ -620,52 +626,58 @@ async function loadChat(chatId, title) {
   sidebar.setActive(chatId);
 
   try {
-    const data = await ChatAPI.getChat(chatId);
+    // Parallelize loading chat content and files for maximum speed
+    const [data] = await Promise.all([
+      ChatAPI.getChat(chatId),
+      uploader.loadFilesForChat(chatId)
+    ]);
+    
     data.messages.forEach(m => appendMessage(chatInner, m.role, m.content));
     
     if (data.messages.length === 0) {
       welcomeScreen.style.display = 'flex';
     }
     scrollToBottom();
+    
+    const lastFileId = localStorage.getItem(`activeFile_${chatId}`);
+    if (lastFileId) {
+      const card = document.querySelector(`.doc-card[data-id="${lastFileId}"]`);
+      if (card) card.click();
+    } else {
+      uploader.deselect();
+    }
   } catch (err) {
     showToast('Failed to load chat.', 'error');
     resetChatView();
   }
-
-  // Load documents for this specific chat
-  const lastFileId = localStorage.getItem(`activeFile_${chatId}`);
-  await uploader.loadFilesForChat(chatId);
-  
-  if (lastFileId) {
-    // Attempt to re-select the last active file for this chat
-    // We search the DOM again because loadFilesForChat just re-rendered it
-    const card = document.querySelector(`.doc-card[data-id="${lastFileId}"]`);
-    if (card) {
-      card.click();
-    }
-  } else {
-    uploader.deselect();
-  }
 }
 
 // ─── New Chat button ──────────────────────────────────────────────────────
-const newChatBtn = document.getElementById('newChatBtn');
 if (newChatBtn) {
   newChatBtn.addEventListener('click', async () => {
+    // 1. Reset UI IMMEDIATELY for instant feel
+    const tempId = 'temp_' + Date.now(); // Temporary ID for sidebar tracking
+    activeChatId = tempId; 
+    chatTitle.textContent = 'New Chat';
+    exportBtn.style.display = 'flex';
+    document.querySelectorAll('.message').forEach(m => m.remove());
+    welcomeScreen.style.display = 'flex';
+    uploader.deselect();
+    
+    // 2. Add to sidebar immediately (Optimistic UI)
+    sidebar.addChatOptimistically({ id: tempId, title: 'New Chat' });
+    sidebar.setActive(tempId);
+    
     try {
+      // 3. Perform backend work in background
       const chat = await ChatAPI.newChat();
+      // Replace temp ID with real ID
       activeChatId = chat.id;
-      chatTitle.textContent = 'New Chat';
-      exportBtn.style.display = 'flex';
-      document.querySelectorAll('.message').forEach(m => m.remove());
-      welcomeScreen.style.display = 'flex';
       sidebar.setActive(chat.id);
-      await sidebar.refresh();
-      
-      uploader.deselect();
+      await sidebar.refresh(); 
       await uploader.loadFilesForChat(chat.id);
     } catch (err) {
-      showToast('Failed to create chat.', 'error');
+      showToast('Failed to finalize new chat creation.', 'error');
     }
   });
 }

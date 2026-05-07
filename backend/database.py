@@ -16,7 +16,7 @@ settings = get_settings()
 # ─── Engine ──────────────────────────────────────────────────────────────────
 engine = create_async_engine(
     settings.database_url,
-    echo=False,       # Set True to log all SQL (debug only)
+    echo=False,
     future=True,
 )
 
@@ -38,31 +38,16 @@ class Base(DeclarativeBase):
 
 async def init_db() -> None:
     """Create all tables and run migrations."""
-    from backend.models import user, chat, file  # noqa: F401
+    # Explicitly import models to ensure registration
+    from backend.models.user import User, OTPRecord, UserPreferences
+    from backend.models.chat import Chat, Message
+    from backend.models.file import UploadedFile
 
-    print("Initialising database...")
+    print(f"Initialising database... (Discovered {len(Base.metadata.tables)} tables)")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    
-    # ─── MIGRATION: Add is_archived and is_hidden to chats ─────────────────
-    async with engine.begin() as conn:
-        try:
-            await conn.execute(text("ALTER TABLE chats ADD COLUMN is_archived BOOLEAN DEFAULT 0"))
-            print("Added 'is_archived' column to 'chats'")
-        except Exception:
-            pass # Already exists
-
-        try:
-            await conn.execute(text("ALTER TABLE chats ADD COLUMN is_hidden BOOLEAN DEFAULT 0"))
-            print("Added 'is_hidden' column to 'chats'")
-        except Exception:
-            pass # Already exists
-
-        try:
-            await conn.execute(text("ALTER TABLE user_preferences ADD COLUMN auto_delete_docs BOOLEAN DEFAULT 0"))
-            print("Added 'auto_delete_docs' column to 'user_preferences'")
-        except Exception:
-            pass # Already exists
+        
+        # Migration block removed as it is no longer needed with the fresh Supabase schema.
     
     print("Database ready.")
 

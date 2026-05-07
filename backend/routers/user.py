@@ -124,6 +124,8 @@ async def update_preferences(
         prefs.language = body.language
     if body.theme is not None:
         prefs.theme = body.theme
+    if body.summary_mode is not None:
+        prefs.summary_mode = body.summary_mode
     if body.auto_delete_docs is not None:
         prefs.auto_delete_docs = body.auto_delete_docs
 

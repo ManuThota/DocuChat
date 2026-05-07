@@ -25,11 +25,11 @@ if TYPE_CHECKING:
 class Chat(Base):
     """A conversation session. Each user can have many chats."""
 
-    __tablename__ = "chats"
+    __tablename__ = "app_chats"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("app_users.id", ondelete="CASCADE"), nullable=False
     )
     title: Mapped[str] = mapped_column(String(255), default="New Chat")
     is_archived: Mapped[bool] = mapped_column(default=False)
@@ -52,11 +52,11 @@ class Chat(Base):
 class Message(Base):
     """A single turn in a chat (user prompt or assistant reply)."""
 
-    __tablename__ = "messages"
+    __tablename__ = "app_messages"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     chat_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("chats.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("app_chats.id", ondelete="CASCADE"), nullable=False
     )
     role: Mapped[str] = mapped_column(String(10), nullable=False)  # 'user' | 'assistant'
     content: Mapped[str] = mapped_column(Text, nullable=False)

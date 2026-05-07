@@ -638,7 +638,7 @@
           </button>
 
           <div id="advancedMenu"
-            style="display: none; flex-direction: column; gap: 8px; margin-top: 12px; padding: 12px; background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border);">
+            style="display: none; flex-direction: column; gap: 8px; margin: 12px auto 0; padding: 12px; background: var(--bg-surface); border-radius: var(--radius-md); border: 1px solid var(--border); width: 85%;">
             <button class="menu-item" id="openChangePasswordBtn">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -847,27 +847,27 @@
 
   <!-- About DocuChat Modal -->
   <div class="chat-action-overlay" id="aboutModalOverlay">
-    <div class="chat-action-modal" style="width: 420px; padding: 32px; text-align: center;">
-      <div class="chat-action-icon-circle" style="background: rgba(124, 111, 253, 0.1); color: #7c6ffd; margin-bottom: 24px;">
-        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
+    <div class="chat-action-modal" style="width: 420px; padding: 24px; text-align: center;">
+      <div class="chat-action-icon-circle" style="background: rgba(124, 111, 253, 0.1); color: #7c6ffd; margin-bottom: 16px; width: 48px; height: 48px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="10" />
           <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
           <line x1="12" y1="17" x2="12.01" y2="17" />
         </svg>
       </div>
-      <h3 style="margin: 0 0 12px; font-size: 22px; font-weight: 700;">About DocuChat</h3>
-      <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 16px; text-align: justify;">
+      <h3 style="margin: 0 0 8px; font-size: 20px; font-weight: 700;">About DocuChat</h3>
+      <p style="font-size: 13.5px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 12px; text-align: justify;">
         DocuChat is a professional AI document companion designed to help you interact with your files effortlessly. 
         Using state-of-the-art RAG technology, it enables deep conversation and analysis across PDFs, documents, and images 
         while keeping your data secure and private.
       </p>
-      <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 24px; text-align: justify; opacity: 0.8;">
+      <p style="font-size: 11px; color: var(--text-muted); line-height: 1.4; margin-bottom: 16px; text-align: justify; opacity: 0.8;">
         If you encounter any bugs or would like to contribute enhancements, please feel free to reach out via GitHub or Email.
       </p>
       
-      <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 24px; text-align: left;">
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+      <div style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 16px; text-align: left;">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
           <a href="https://github.com/ManuThota/DocuChat" target="_blank" class="about-link" style="font-size: 13px; font-weight: 500;">ManuThota/DocuChat</a>
         </div>

@@ -245,9 +245,20 @@ export function initSidebar({ listEl, searchInput, getActiveChatId, showToast, o
 
     try {
       if (type === 'delete') {
-        await ChatAPI.deleteChat(id);
+        // Optimistic UI: Remove from local array and re-render immediately
+        allChats = allChats.filter(c => c.id !== id);
+        render(allChats);
         onChatDelete(id);
         showToast('Chat deleted', 'info');
+        closeActionModal();
+
+        // Bypass backend call if it's a temporary optimistic chat
+        if (typeof id === 'string' && id.startsWith('temp_')) {
+          return;
+        }
+
+        await ChatAPI.deleteChat(id);
+        return; 
       } else if (type === 'archive') {
         await ChatAPI.updateChat(id, { is_archived: true });
         showToast('Chat archived', 'success');
@@ -309,7 +320,13 @@ export function initSidebar({ listEl, searchInput, getActiveChatId, showToast, o
     });
   }
 
-  return { refresh, setActive, showFiltered };
+  function addChatOptimistically(chat) {
+    // Add to the top of the list
+    allChats.unshift(chat);
+    render(allChats);
+  }
+
+  return { refresh, setActive, showFiltered, addChatOptimistically };
 }
 
 

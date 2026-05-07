@@ -25,14 +25,14 @@ if TYPE_CHECKING:
 class UploadedFile(Base):
     """Metadata for a user-uploaded document."""
 
-    __tablename__ = "uploaded_files"
+    __tablename__ = "app_uploaded_files"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("app_users.id", ondelete="CASCADE"), nullable=False
     )
     chat_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("chats.id", ondelete="CASCADE"), nullable=True
+        Integer, ForeignKey("app_chats.id", ondelete="CASCADE"), nullable=True
     )
     original_name: Mapped[str] = mapped_column(String(255), nullable=False)
     stored_name: Mapped[str] = mapped_column(String(255), nullable=False)  # UUID-based filename

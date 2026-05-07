@@ -20,6 +20,9 @@ async def auto_delete_old_documents():
     Periodic task that checks for documents older than 24 hours 
     for users who have 'auto_delete_docs' enabled.
     """
+    # Wait for DB to be fully ready on startup (especially for Supabase)
+    await asyncio.sleep(10)
+    
     while True:
         try:
             print("Running auto-delete cleanup task...")

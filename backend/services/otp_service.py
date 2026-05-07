@@ -48,7 +48,7 @@ async def generate_and_store_otp(email: str, db: AsyncSession, context: str = "s
         The generated OTP code (for testing / logging — do NOT expose in API response).
     """
     from sqlalchemy import delete
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None) # Use naive UTC for DB compatibility
 
     # 1. Cleanup: Delete all prior OTPs for this specific email
     # 2. Cleanup: Delete ALL expired OTPs from the database (Global hygiene)
@@ -88,7 +88,7 @@ async def verify_otp(email: str, code: str, db: AsyncSession) -> bool:
     Returns:
         True if valid and not expired, False otherwise.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     
     # Fetch the record regardless of expiration to ensure we can delete it after the attempt
     result = await db.execute(

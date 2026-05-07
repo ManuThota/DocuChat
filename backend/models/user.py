@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 class User(Base):
     """Registered user account. Password is stored as a bcrypt hash."""
 
-    __tablename__ = "users"
+    __tablename__ = "app_users"
 
     id:            Mapped[int]       = mapped_column(Integer, primary_key=True, autoincrement=True)
     email:         Mapped[str]       = mapped_column(String(255), unique=True, nullable=False, index=True)
@@ -62,7 +62,7 @@ class OTPRecord(Base):
     Each code expires after 10 minutes and is single-use.
     """
 
-    __tablename__ = "otp_records"
+    __tablename__ = "app_otp_records"
 
     id:         Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
     email:      Mapped[str]      = mapped_column(String(255), nullable=False, index=True)
@@ -75,11 +75,11 @@ class OTPRecord(Base):
 class UserPreferences(Base):
     """Per-user settings: theme, language, summary style."""
 
-    __tablename__ = "user_preferences"
+    __tablename__ = "app_user_preferences"
 
     id:           Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id:      Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
+        Integer, ForeignKey("app_users.id", ondelete="CASCADE"), unique=True, nullable=False
     )
     language:     Mapped[str] = mapped_column(String(20), default="English")
     theme:        Mapped[str] = mapped_column(String(10), default="dark")
