@@ -307,34 +307,43 @@ document.addEventListener('click', () => {
 });
 
 if (menuProfileBtn) {
-  menuProfileBtn.addEventListener('click', async () => {
+  menuProfileBtn.addEventListener('click', () => {
     // 1. Open immediately for instant feel
     profileOverlay.classList.add('open');
     userMenuPopup.classList.remove('show');
     
-    // 2. Load data in background
-    try {
-      const profile = await UserAPI.getProfile();
-      initialProfileState = { 
-        name: profile.name || '', 
-        gender: profile.gender || '', 
-        profession: profile.profession || '' 
-      };
-      
-      if (profileNameInput)   profileNameInput.value   = initialProfileState.name;
-      if (genderSelect)        genderSelect.setValue(initialProfileState.gender);
-      if (professionSelect)    professionSelect.setValue(initialProfileState.profession);
-      if (profileEmailInput)  profileEmailInput.value  = profile.email || '';
-      
-      // Reset advanced section
-      if (advancedMenu) advancedMenu.style.display = 'none';
-      if (advancedOptionsBtn) advancedOptionsBtn.querySelector('svg').style.transform = 'rotate(0)';
-      
-    } catch (err) {
-      profileOverlay.classList.remove('open');
-      showToast('Failed to load profile', 'error');
+    // 2. Use cached profile if available for zero-lag render
+    if (cachedProfile) {
+      fillProfileUI(cachedProfile);
     }
+    
+    // 3. Refresh data in background
+    UserAPI.getProfile().then(profile => {
+      cachedProfile = profile;
+      if (profileOverlay.classList.contains('open')) {
+        fillProfileUI(profile);
+      }
+    }).catch(() => {
+      if (!cachedProfile) {
+        profileOverlay.classList.remove('open');
+        showToast('Failed to load profile', 'error');
+      }
+    });
   });
+}
+
+function fillProfileUI(profile) {
+  initialProfileState = { 
+    name: profile.name || '', 
+    gender: profile.gender || '', 
+    profession: profile.profession || '' 
+  };
+  if (profileNameInput)   profileNameInput.value   = initialProfileState.name;
+  if (genderSelect)        genderSelect.setValue(initialProfileState.gender);
+  if (professionSelect)    professionSelect.setValue(initialProfileState.profession);
+  if (profileEmailInput)  profileEmailInput.value  = profile.email || '';
+  if (advancedMenu)       advancedMenu.style.display = 'none';
+  if (advancedOptionsBtn) advancedOptionsBtn.querySelector('svg').style.transform = 'rotate(0)';
 }
 
 // Advanced Options Toggle
@@ -450,10 +459,15 @@ async function saveProfile() {
 
 if (saveProfileBtn) {
   saveProfileBtn.addEventListener('click', async () => {
+    // Optimistic UI: Close immediately
+    profileOverlay.classList.add('saving'); // Optional: show a small saving state
+    profileOverlay.classList.remove('open');
     try {
       await saveProfile();
       showToast('Profile updated successfully!', 'success');
-    } catch (err) { /* Toast already shown in saveProfile */ }
+    } catch (err) {
+      // Re-open if failed? Usually better to just toast.
+    }
   });
 }
 
@@ -601,6 +615,8 @@ const uploader = initUpload({
 
 // ─── Load a chat (open from sidebar) ──────────────────────────────────────
 const chatDrafts = {};
+const chatCache  = {}; // Local cache for instant switching
+let cachedProfile = null; // Cache for profile data
 
 async function loadChat(chatId, title) {
   // Save current draft before switching
@@ -624,31 +640,61 @@ async function loadChat(chatId, title) {
   welcomeScreen.style.display = 'none';
   document.querySelectorAll('.message').forEach(m => m.remove());
   sidebar.setActive(chatId);
+  
+  // If it's a temporary optimistic chat, skip fetching from DB
+  if (typeof chatId === 'string' && chatId.startsWith('temp_')) {
+    welcomeScreen.style.display = 'flex';
+    uploader.deselect();
+    return;
+  }
+
+  // 1. Instant Render from Cache
+  if (chatCache[chatId]) {
+    const cached = chatCache[chatId];
+    cached.messages.forEach(m => appendMessage(chatInner, m.role, m.content));
+    if (cached.messages.length === 0) welcomeScreen.style.display = 'flex';
+    scrollToBottom();
+  }
 
   try {
-    // Parallelize loading chat content and files for maximum speed
+    // 2. Background Refresh (Parallelize loading content and files)
     const [data] = await Promise.all([
       ChatAPI.getChat(chatId),
       uploader.loadFilesForChat(chatId)
     ]);
     
-    data.messages.forEach(m => appendMessage(chatInner, m.role, m.content));
-    
-    if (data.messages.length === 0) {
-      welcomeScreen.style.display = 'flex';
-    }
-    scrollToBottom();
-    
-    const lastFileId = localStorage.getItem(`activeFile_${chatId}`);
-    if (lastFileId) {
-      const card = document.querySelector(`.doc-card[data-id="${lastFileId}"]`);
-      if (card) card.click();
-    } else {
-      uploader.deselect();
+    // 3. Update UI only if data is different or we don't have cache yet
+    if (activeChatId === chatId) {
+      const oldData = chatCache[chatId];
+      const isIdentical = oldData && 
+                          JSON.stringify(oldData.messages) === JSON.stringify(data.messages);
+      
+      if (!isIdentical) {
+        document.querySelectorAll('.message').forEach(m => m.remove());
+        data.messages.forEach(m => appendMessage(chatInner, m.role, m.content));
+        
+        if (data.messages.length === 0) {
+          welcomeScreen.style.display = 'flex';
+        }
+        scrollToBottom();
+      }
+
+      // Update Cache for future
+      chatCache[chatId] = data;
+      
+      const lastFileId = localStorage.getItem(`activeFile_${chatId}`);
+      if (lastFileId) {
+        const card = document.querySelector(`.doc-card[data-id="${lastFileId}"]`);
+        if (card) card.click();
+      } else {
+        uploader.deselect();
+      }
     }
   } catch (err) {
-    showToast('Failed to load chat.', 'error');
-    resetChatView();
+    if (!chatCache[chatId]) {
+      showToast('Failed to load chat.', 'error');
+      resetChatView();
+    }
   }
 }
 
@@ -671,10 +717,10 @@ if (newChatBtn) {
     try {
       // 3. Perform backend work in background
       const chat = await ChatAPI.newChat();
-      // Replace temp ID with real ID
+      // Replace temp ID with real ID in place (flicker-free)
       activeChatId = chat.id;
+      sidebar.finalizeTempChat(tempId, chat);
       sidebar.setActive(chat.id);
-      await sidebar.refresh(); 
       await uploader.loadFilesForChat(chat.id);
     } catch (err) {
       showToast('Failed to finalize new chat creation.', 'error');
@@ -695,16 +741,14 @@ async function sendMessage() {
   autoResize(msgInput);
 
   // 2. Chat Persistence (Create if new)
-  if (!activeChatId) {
+  if (!activeChatId || (typeof activeChatId === 'string' && activeChatId.startsWith('temp_'))) {
     try {
       const chat = await ChatAPI.newChat();
       activeChatId = chat.id;
       if (exportBtn) exportBtn.style.display = 'flex';
       welcomeScreen.style.display = 'none';
-      if (window.sidebar) {
-        sidebar.setActive(activeChatId);
-        await sidebar.refresh();
-      }
+      sidebar.setActive(activeChatId);
+      await sidebar.refresh();
     } catch (err) {
       showToast('Failed to create chat.', 'error');
       msgInput.value = content; 
@@ -712,6 +756,14 @@ async function sendMessage() {
       sendBtn.disabled = false;
       return;
     }
+  }
+
+  // 2.1 Optimistic Title Update (Instant name generation)
+  if (chatTitle.textContent === 'New Chat' || !chatTitle.textContent) {
+    const words = content.split(' ').slice(0, 5).join(' ');
+    const displayTitle = words.length > 30 ? words.substring(0, 27) + '...' : words;
+    chatTitle.textContent = displayTitle;
+    sidebar.updateChatTitleOptimistically(activeChatId, displayTitle);
   }
 
   const language = document.getElementById('languageSelect').value;
@@ -802,25 +854,19 @@ async function sendMessage() {
         }
       }
       
-      await streamPromise; 
-      
-      // Update sidebar and title immediately after stream finishes
-      await sidebar.refresh();
-      sidebar.setActive(activeChatId);
-      const updatedChat = await ChatAPI.getChat(activeChatId);
-      if (updatedChat && updatedChat.title) {
-        chatTitle.textContent = updatedChat.title;
-      }
     }
 
-    // After completion, update UI state
+    // After completion, update UI state (flicker-free)
     await sidebar.refresh();
     sidebar.setActive(activeChatId);
     
-    // Explicitly update the topbar title from the DB
+    // 3. Optional: Refine title from DB only if it's better than our instant one
     try {
       const chatData = await ChatAPI.getChat(activeChatId);
-      if (chatTitle) chatTitle.textContent = chatData.title;
+      if (chatData && chatData.title && chatData.title !== 'New Chat') {
+        chatTitle.textContent = chatData.title;
+        // sidebar.refresh() already updated the sidebar item
+      }
     } catch (e) {
       console.error("Failed to update chat header:", e);
     }

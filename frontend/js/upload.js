@@ -194,8 +194,16 @@ export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, ac
 
   // ─── Load files for a specific chat ──────────────────────────────────────
   let currentLoadChatId = null;
+  const docCache = {}; // Cache doc list per chat
+
   async function loadFilesForChat(chatId) {
     currentLoadChatId = chatId;
+    
+    // 1. Render from cache immediately for zero-lag feel
+    if (docCache[chatId]) {
+      renderDocCards(docCache[chatId], chatId);
+    }
+
     try {
       const allFiles = await UploadAPI.listFiles();
       // Ensure we only render if this is still the active chat
@@ -203,11 +211,15 @@ export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, ac
 
       const files = chatId ? allFiles.filter(f => f.chat_id === chatId) : [];
 
-      if (!files.length) {
-        filesPanel.innerHTML = '<div class="doc-empty">No documents in this chat yet.</div>';
-        return;
+      // 2. Only re-render if data has changed to prevent flicker
+      if (JSON.stringify(docCache[chatId]) !== JSON.stringify(files)) {
+        docCache[chatId] = files;
+        if (!files.length) {
+          filesPanel.innerHTML = '<div class="doc-empty">No documents in this chat yet.</div>';
+          return;
+        }
+        renderDocCards(files, chatId);
       }
-      renderDocCards(files, chatId);
     } catch (_) { /* silently ignore */ }
   }
 

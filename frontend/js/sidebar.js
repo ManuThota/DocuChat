@@ -316,7 +316,7 @@ export function initSidebar({ listEl, searchInput, getActiveChatId, showToast, o
 
   function setActive(chatId) {
     document.querySelectorAll('.chat-item').forEach(el => {
-      el.classList.toggle('active', parseInt(el.dataset.id, 10) === chatId);
+      el.classList.toggle('active', String(el.dataset.id) === String(chatId));
     });
   }
 
@@ -326,7 +326,23 @@ export function initSidebar({ listEl, searchInput, getActiveChatId, showToast, o
     render(allChats);
   }
 
-  return { refresh, setActive, showFiltered, addChatOptimistically };
+  function updateChatTitleOptimistically(chatId, newTitle) {
+    const chat = allChats.find(c => c.id === chatId);
+    if (chat) {
+      chat.title = newTitle;
+      render(allChats);
+    }
+  }
+
+  function finalizeTempChat(tempId, realChat) {
+    const idx = allChats.findIndex(c => String(c.id) === String(tempId));
+    if (idx !== -1) {
+      allChats[idx] = realChat;
+      render(allChats);
+    }
+  }
+
+  return { refresh, setActive, showFiltered, addChatOptimistically, updateChatTitleOptimistically, finalizeTempChat };
 }
 
 
