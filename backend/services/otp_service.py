@@ -47,14 +47,18 @@ async def generate_and_store_otp(email: str, db: AsyncSession, context: str = "s
     Returns:
         The generated OTP code (for testing / logging — do NOT expose in API response).
     """
-    # Delete all prior OTPs for this email (cleanup)
     from sqlalchemy import delete
+    now = datetime.now(timezone.utc)
+
+    # 1. Cleanup: Delete all prior OTPs for this specific email
+    # 2. Cleanup: Delete ALL expired OTPs from the database (Global hygiene)
     await db.execute(
-        delete(OTPRecord).where(OTPRecord.email == email)
+        delete(OTPRecord).where(
+            (OTPRecord.email == email) | (OTPRecord.expires_at < now)
+        )
     )
 
     otp_code = _generate_otp()
-    now = datetime.now(timezone.utc)
     expires_at = now + timedelta(minutes=OTP_EXPIRY_MINUTES)
 
     record = OTPRecord(
@@ -79,17 +83,18 @@ async def verify_otp(email: str, code: str, db: AsyncSession) -> bool:
     """
     Check whether the given OTP code is valid for the email address.
 
-    Deletes the code if valid (instant cleanup).
+    Deletes the code immediately after the attempt (instant cleanup & security).
 
     Returns:
-        True if valid, False otherwise.
+        True if valid and not expired, False otherwise.
     """
     now = datetime.now(timezone.utc)
+    
+    # Fetch the record regardless of expiration to ensure we can delete it after the attempt
     result = await db.execute(
         select(OTPRecord).where(
             OTPRecord.email == email,
-            OTPRecord.otp_code == code,
-            OTPRecord.expires_at > now,
+            OTPRecord.otp_code == code
         )
     )
     record = result.scalar_one_or_none()
@@ -97,9 +102,14 @@ async def verify_otp(email: str, code: str, db: AsyncSession) -> bool:
     if record is None:
         return False
 
+    # Check validity before deleting
+    is_valid = record.expires_at > now
+
+    # Delete the record immediately (it's been "validated" now, so it must be gone)
     await db.delete(record)
     await db.commit()
-    return True
+
+    return is_valid
 
 
 async def _send_otp_email(to_email: str, otp_code: str, context: str) -> None:
