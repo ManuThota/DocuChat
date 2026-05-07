@@ -311,7 +311,6 @@
 
 .chat-item-dots:hover {
   color: var(--text-primary);
-  background: var(--bg-elevated);
 }
 
 .chat-options-menu {
