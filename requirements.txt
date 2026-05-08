@@ -1,44 +1,45 @@
-# ─── Web Framework ────────────────────────────────────────────────────────────
-fastapi==0.110.0
-uvicorn[standard]==0.29.0
-gunicorn==21.2.0
-python-multipart==0.0.9
+# ─── Web Framework & Server ──────────────────────────────────────────────────
+fastapi==0.110.0                 # High-performance API framework
+uvicorn[standard]==0.29.0        # Development ASGI server
+python-multipart==0.0.9          # Required for handling file uploads
 
-# ─── Database ─────────────────────────────────────────────────────────────────
-sqlalchemy==2.0.29
-aiosqlite==0.20.0
-asyncpg==0.31.0
+# ─── Database & ORM ──────────────────────────────────────────────────────────
+sqlalchemy==2.0.29               # SQL Toolkit and Object-Relational Mapper
+aiosqlite==0.20.0                # Async driver for SQLite (Development)
+asyncpg==0.31.0                  # Async driver for PostgreSQL (Production/Supabase)
 
 # ─── Auth & Security ──────────────────────────────────────────────────────────
-PyJWT==2.8.0
-passlib[bcrypt]==1.7.4
-bcrypt==4.0.1          # Password hashing with bcrypt
-python-dotenv==1.0.1
+PyJWT==2.8.0                     # JSON Web Token authentication
+passlib[bcrypt]==1.7.4           # Password hashing utilities
+bcrypt==4.0.1                    # Secure password hashing backend
+python-dotenv==1.0.1             # Environment variable management (.env)
 
-# ─── HuggingFace Inference API (no local model download!) ─────────────────────
-huggingface_hub>=0.23.0          # embeddings + BART summarization
-groq>=0.13.0                     # chat / Q&A — free tier (14k req/day)
+# ─── AI & LLM APIs (Inference) ───────────────────────────────────────────────
+huggingface_hub>=0.23.0          # Access to HF Inference API (Embeddings + BART)
+groq>=0.13.0                     # Ultra-fast LLM inference for Q&A (Llama 3.1)
 
-# ─── Vector Search ────────────────────────────────────────────────────────────
-faiss-cpu==1.9.0.post1
-numpy>=2.0.0                   # 2.x has py313 wheels — no compilation needed
+# ─── Vector Search & Processing ───────────────────────────────────────────────
+faiss-cpu==1.9.0.post1           # Efficient similarity search for RAG
+numpy>=2.0.0                     # Required for FAISS (using 2.x for Py3.13 support)
 
-# ─── Document Parsing ─────────────────────────────────────────────────────────
-PyMuPDF>=1.24.5                # 1.24.5+ has py313 wheels
-python-docx==1.1.0
-pytesseract==0.3.10
-Pillow==11.2.1
+# ─── Document Parsing & OCR ───────────────────────────────────────────────────
+PyMuPDF>=1.24.5                  # Fast PDF text extraction (fitz)
+python-docx==1.1.0               # Word (.docx) document parsing
+pytesseract==0.3.10              # OCR for image-based PDFs/Images
+Pillow==11.2.1                   # Image processing library (Required for OCR)
 
-# ─── PDF Export ───────────────────────────────────────────────────────────────
-reportlab==4.5.0
+# ─── PDF Export & Formatting ──────────────────────────────────────────────────
+reportlab==4.5.0                 # PDF document generation for exports
+markdown2==2.4.13                # Converts AI Markdown responses to HTML
+beautifulsoup4==4.12.3           # HTML cleaning/parsing for PDF layout
 
-# ─── Email ────────────────────────────────────────────────────────────────────
-aiosmtplib==3.0.1
+# ─── Email & Networking ───────────────────────────────────────────────────────
+aiosmtplib==3.0.1                # Async SMTP client for sending OTP emails
+httpx==0.27.0                    # Modern async HTTP client for API requests
 
-# ─── Utilities ────────────────────────────────────────────────────────────────
-httpx==0.27.0
-pydantic[email]==2.7.0
-pydantic-settings==2.2.1
+# ─── Data Validation ──────────────────────────────────────────────────────────
+pydantic[email]==2.7.0           # Data validation and settings management
+pydantic-settings==2.2.1         # Environment configuration for Pydantic
 
-# # ─── Deployement ────────────────────────────────────────────────────────────
-gunicorn
+# ─── Production Deployment ────────────────────────────────────────────────────
+gunicorn==21.2.0                 # Production-grade WSGI/ASGI server
