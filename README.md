@@ -123,7 +123,7 @@ docuchat/
 
 ### 2. Clone & Environment
 ```bash
-git clone https://github.com/yourusername/docuchat.git
+git clone https://github.com/ManuThota/DocuChat.git
 cd docuchat
 
 # Create and activate virtual environment
