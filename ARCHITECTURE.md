@@ -2,30 +2,24 @@
 
 ## Overview
 
-DocuChat is a full-stack AI web application that allows users to upload documents
-and interact with them through a conversational interface powered by open-source
-HuggingFace models. It uses a Retrieval-Augmented Generation (RAG) pipeline to
-answer questions grounded in the uploaded document content.
+DocuChat is a high-performance RAG (Retrieval-Augmented Generation) platform designed for professional document intelligence. It allows users to upload large documents (up to 50MB) and interact with them using a hybrid AI architecture that combines **Groq's LPU™ technology** for near-instant reasoning with **HuggingFace's Inference API** for robust vector embeddings.
 
-All AI inference is handled via the **HuggingFace Serverless Inference API** —
-no models are downloaded or run locally. Only FAISS (vector index math) runs
-on-device.
+The system is built on a **Service-Oriented Architecture (SOA)** using FastAPI, ensuring asynchronous non-blocking operations for all file parsing and AI inference tasks.
 
 ---
 
 ## Architecture Diagram
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────────┐
 │                        BROWSER (Frontend)                          │
 │                                                                    │
 │     ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐     │
 │     │ index    │  │ signup   │  │ verify   │  │  dashboard   │     │
 │     │ .html    │  │ .html    │  │ .html    │  │  .html       │     │
-│     │ (login)  │  │          │  │ (OTP)    │  │  (main UI)   │     │
 │     └────┬─────┘  └────┬─────┘  └────┬─────┘  └───────┬──────┘     │
 │          └─────────────┴─────────────┴────────────────┘            │
-│                                │ api.js (fetch + JWT)              │
+│                                │ api.js (relative fetch + JWT)     │
 └────────────────────────────────┼───────────────────────────────────┘
                                  │ HTTP/REST (JSON)
                                  ▼
@@ -35,38 +29,36 @@ on-device.
 │   ┌─────────┐  ┌─────────┐  ┌──────────┐  ┌────────┐  ┌────────┐   │
 │   │ /auth   │  │ /chat   │  │ /upload  │  │/export │  │ /user  │   │
 │   │ router  │  │ router  │  │ router   │  │ router │  │ router │   │
-│   └────┬────┘  └────┬────┘  └────┬─────┘  └───┬────┘  └───┬────┘   │   
+│   └────┬────┘  └────┬────┘  └────┬─────┘  └───┬────┘  └───┬────┘   │    
 │        └────────────┴────────────┴────────────┴───────────┘        │
-│                               │ Services Layer                     │
-│     ┌──────────────┐  ┌───────┴──────┐  ┌───────────────┐          │
-│     │ otp_service  │  │ rag_pipeline │  │ export_service│          │
-│     │ (SMTP email) │  │ (FAISS+API)  │  │ (ReportLab)   │          │
-│     └──────────────┘  └───────┬──────┘  └───────────────┘          │
-│                               │                                    │
-│  ┌────────────────────────────┴─────────────────────────────────┐  │
-│  │              HuggingFace Inference API (Cloud)               │  │
-│  │  ┌───────────────┐  ┌──────────────┐  ┌──────────────────┐   │  │
-│  │  │ BART-large-cnn│  │ Flan-T5-large│  │ MiniLM-L6-v2     │   │  │
-│  │  │ (Summarize)   │  │ (Q&A/Chat)   │  │ (Embeddings)     │   │  │
-│  │  └───────────────┘  └──────────────┘  └──────────────────┘   │  │
-│  │       ↑ HTTP calls via huggingface_hub InferenceClient       │  │
-│  └──────────────────────────────────────────────────────────────┘  │
-└────────────────────────────────┬───────────────────────────────────┘
-                                 │
-                    ┌────────────┴──────────────┐
-                    │                           │
-                    ▼                           ▼
-           ┌────────────────┐         ┌──────────────────┐
-           │  SQLite / PG   │         │  FAISS Index     │
-           │  (SQLAlchemy)  │         │  + .chunks file  │
-           │                │         │  (per document)  │
-           │  users         │         │  /uploads/       │
-           │  chats         │         │  {user_id}/      │
-           │  messages      │         │  {uuid}.faiss    │
-           │  uploaded_files│         │  {uuid}.chunks   │
-           │  otp_records   │         └──────────────────┘
-           │  user_prefs    │
-           └────────────────┘
+│                                │                                   │
+│                      ┌─────────┴──────────┐                        │
+│                      │   Services Layer   │                        │
+│            ┌─────────┴────────────────────┴─────────┐              │
+│            ▼                                        ▼              │
+│    ┌──────────────┐                  ┌────────────────────────┐    │
+│    │  ai_engine   │                  │      rag_pipeline      │    │
+│    │ (Model Route)│                  │ (FAISS + Embed + Q&A)  │    │
+│    └──────┬───────┘                  └──────────────┬─────────┘    │
+│           │                                         │              │
+└───────────┼─────────────────────────────────────────┼──────────────┘
+            │                                         │
+     ┌──────┴───────────────┐               ┌─────────┴─────────────┐
+     │       Groq API       │               │ HuggingFace API (HF)  │
+     │  (LPU Inference)     │               │ (Serverless Inference)│
+     │ ┌──────────────────┐ │               │ ┌──────────────────┐  │
+     │ │ Llama-3.3-70B    │ │               │ │ all-MiniLM-L6-v2 │  │
+     │ │ (Synthesis/Sum)  │ │               │ │ (Embeddings)     │  │
+     │ ├──────────────────┤ │               │ ├──────────────────┤  │
+     │ │ Llama-3.1-8B     │ │               │ │ BART-Large-CNN   │  │
+     │ │ (Q&A / Map)      │ │               │ │ (Sum Fallback)   │  │
+     │ └──────────────────┘ │               │ └──────────────────┘  │
+     └──────────────────────┘               └───────────────────────┘
+              │                                         │
+     ┌────────┴───────────────┐             ┌───────────┴───────────┐
+     │   SQLite / PostgreSQL  │             │   Local FAISS Index   │
+     │  (Users, Chats, Msgs)  │             │   + .chunks storage   │
+     └────────────────────────┘             └───────────────────────┘
 ```
 
 ---
@@ -75,259 +67,172 @@ on-device.
 
 ### Phase 1: Document Indexing (Upload Time)
 
-```
-User uploads file
-        │
-        ▼
-┌─────────────────┐
-│ document_parser │  Extract raw text
-│ .extract_text() │  (PDF→fitz, DOCX→python-docx,
-└────────┬────────┘   TXT→decode, IMG→pytesseract)
-         │
-         ▼
-┌─────────────────┐
-│ chunker         │  Split text into overlapping
-│ .chunk_text()   │  500-word chunks (50-word overlap)
-└────────┬────────┘
-         │  ["chunk1", "chunk2", ...]
-         ▼
-┌─────────────────────────┐
-│ HF Inference API        │  Embed each chunk via HTTP:
-│ feature_extraction()    │  model = all-MiniLM-L6-v2
-│ (batched, 32 at a time) │  → 384-dimensional dense vector
-└──────────┬──────────────┘
-           │  [[0.12, -0.34, ...], ...]
-           ▼
-┌─────────────────────────┐
-│ FAISS IndexFlatIP       │  Build inner-product index
-│ (cosine similarity)     │  over all chunk vectors
-└──────────┬──────────────┘
-           │
-           ▼
-   Save to disk:
-   uploads/{user_id}/{uuid}.faiss   ← vector index
-   uploads/{user_id}/{uuid}.chunks  ← raw text chunks
-```
+1.  **Validation**: `file_validator.py` checks MIME type and confirms the file is under **50MB**.
+2.  **Parsing**: `document_parser.py` extracts raw text based on extension (PDF, DOCX, TXT, or OCR for Images).
+3.  **Chunking**: `chunker.py` splits text into overlapping 500-word blocks.
+4.  **Embedding**: Chunks are sent in batches of 32 to **HF Inference API** (`all-MiniLM-L6-v2`) to generate 384-dimensional vectors.
+5.  **Vector Store**: Vectors are added to a **FAISS IndexFlatIP** (Inner Product for Cosine Similarity).
+6.  **Persistence**: The `.faiss` index and `.chunks` text file are saved to `uploads/{user_id}/`.
 
 ### Phase 2: Question Answering (Query Time)
 
-```
-User asks question
-        │
-        ▼
-┌─────────────────────────┐
-│ HF Inference API        │  Embed the question via HTTP:
-│ feature_extraction()    │  model = all-MiniLM-L6-v2
-└──────────┬──────────────┘
-           │
-           ▼
-┌─────────────────────────┐
-│ faiss.index.search()    │  Find top-4 most similar
-│ (cosine similarity)     │  chunk vectors (runs locally)
-└──────────┬──────────────┘
-           │  [chunk_idx_1, chunk_idx_2, ...]
-           ▼
-┌─────────────────────────┐
-│ Load .chunks file       │  Retrieve the actual text
-│ → top-k chunks          │  of the matched chunks
-└──────────┬──────────────┘
-           │
-           ▼
-┌─────────────────────────────────────────────────────┐
-│ HF Inference API — Flan-T5-large                     │
-│ text_generation()                                   │
-│                                                     │
-│  Prompt:                                            │
-│  "Context:\n{chunk1}\n{chunk2}\n...                │
-│   Question: {user_question}\nAnswer:"              │
-└──────────┬──────────────────────────────────────────┘
-           │
-           ▼
-      AI-generated answer grounded in document
-```
+1.  **Context Retrieval**:
+    *   User query is embedded via HF API.
+    *   FAISS performs a similarity search to find the **Top-8** most relevant chunks.
+    *   Retrieved chunks are formatted into a single context block.
+2.  **Prompt Engineering**:
+    *   A professional system prompt is constructed, injecting the retrieved context and conversation history.
+3.  **Groq Inference**:
+    *   The request is routed through the **Groq API** using an automated model-rotation strategy (Llama 3.3 70B → Llama 3.1 8B → Fallbacks).
+    *   Streaming responses are yielded word-by-word via **Server-Sent Events (SSE)** or standard JSON.
+
+### Phase 3: Summarization (Map-Reduce)
+
+1.  **Map Phase**: The document is split into 4000-character segments. Each segment is summarized into key highlights using `llama-3.1-8b-instant`.
+2.  **Fallback**: If Groq rate limits are hit, the system silently switches to **HF BART-Large-CNN** for individual segments.
+3.  **Reduce Phase**: All highlights are aggregated and passed to `llama-3.3-70b-versatile` to synthesize a cohesive final summary in the requested mode (Brief, Detailed, etc.).
 
 ---
 
 ## Database Schema
 
-```sql
--- Users table
-CREATE TABLE users (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    email       VARCHAR(255) UNIQUE NOT NULL,
-    name        VARCHAR(100),
-    is_active   BOOLEAN DEFAULT TRUE,
-    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
-);
+DocuChat uses a relational schema (SQLAlchemy) supporting both SQLite (Dev) and PostgreSQL (Prod):
 
--- OTP records (temporary, expire after 10 min)
-CREATE TABLE otp_records (
-    id          INTEGER PRIMARY KEY,
-    email       VARCHAR(255) NOT NULL,
-    otp_code    VARCHAR(6) NOT NULL,
-    is_used     BOOLEAN DEFAULT FALSE,
-    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-    expires_at  DATETIME NOT NULL
-);
-
--- User preferences
-CREATE TABLE user_preferences (
-    id           INTEGER PRIMARY KEY,
-    user_id      INTEGER UNIQUE REFERENCES users(id),
-    language     VARCHAR(20) DEFAULT 'English',
-    theme        VARCHAR(10) DEFAULT 'dark',
-    summary_mode VARCHAR(30) DEFAULT 'short'
-);
-
--- Chat sessions
-CREATE TABLE chats (
-    id          INTEGER PRIMARY KEY,
-    user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    title       VARCHAR(255) DEFAULT 'New Chat',
-    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- Messages within a chat
-CREATE TABLE messages (
-    id          INTEGER PRIMARY KEY,
-    chat_id     INTEGER REFERENCES chats(id) ON DELETE CASCADE,
-    role        VARCHAR(10) NOT NULL,  -- 'user' | 'assistant'
-    content     TEXT NOT NULL,
-    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- Uploaded files and their FAISS index paths
-CREATE TABLE uploaded_files (
-    id                INTEGER PRIMARY KEY,
-    user_id           INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    chat_id           INTEGER REFERENCES chats(id),
-    original_name     VARCHAR(255) NOT NULL,
-    stored_name       VARCHAR(255) NOT NULL,
-    file_type         VARCHAR(10) NOT NULL,
-    file_size         INTEGER NOT NULL,
-    extracted_text    TEXT,
-    faiss_index_path  VARCHAR(500),
-    created_at        DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
+-   **Users**: Identity, email verification status, and timestamps.
+-   **OTPRecords**: Temporary 6-digit codes for passwordless auth.
+-   **UserPreferences**: Per-user settings (Language, Theme, Summary Mode).
+-   **Chats**: Conversation containers linked to a specific user.
+-   **Messages**: Individual role-based messages ('user' | 'assistant') with Markdown content.
+-   **UploadedFiles**: Metadata for parsed documents, including paths to their local FAISS indexes.
 
 ---
 
 ## API Reference
 
 | Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| POST | `/auth/send-otp` | ✗ | Send OTP to email |
-| POST | `/auth/verify-otp` | ✗ | Verify OTP, receive JWT |
-| POST | `/auth/logout` | ✗ | Informational (client deletes token) |
-| POST | `/upload/document` | ✓ | Upload + parse + index a file |
-| GET | `/upload/files` | ✓ | List user's uploaded files |
-| POST | `/chat/new` | ✓ | Create a new chat session |
-| POST | `/chat/message` | ✓ | Send message, get AI reply |
-| GET | `/chat/history` | ✓ | List all user chats |
-| GET | `/chat/{id}` | ✓ | Get chat + all messages |
-| DELETE | `/chat/{id}` | ✓ | Delete a chat |
-| POST | `/export/pdf` | ✓ | Export chat as PDF download |
-| GET | `/user/profile` | ✓ | Get user info + preferences |
-| PATCH | `/user/preferences` | ✓ | Update preferences |
+|:-------|:---------|:-----|:------------|
+| **POST** | `/auth/send-otp` | ✗ | Trigger async SMTP email with 6-digit code. |
+| **POST** | `/auth/verify-otp` | ✗ | Exchange OTP for a 24h JWT access token. |
+| **POST** | `/upload/document`| ✓ | Multipart upload. Triggers parsing & FAISS indexing. |
+| **GET**  | `/upload/files`   | ✓ | Fetch metadata for all documents in current session. |
+| **POST** | `/chat/message`   | ✓ | Primary RAG endpoint. Supports `stream=true`. |
+| **GET**  | `/chat/history`   | ✓ | Retrieve list of previous conversation titles. |
+| **POST** | `/export/pdf`     | ✓ | Generates a ReportLab PDF from chat JSON. |
+| **GET**  | `/user/profile`   | ✓ | Returns active user data and UI preferences. |
 
 ---
 
 ## Security Practices
 
-1. **No passwords stored** — OTP-only auth eliminates password breach risk
-2. **JWT tokens** — Stateless, signed with HS256, expire in 24 hours
-3. **OTP replay protection** — Each OTP marked `is_used=True` after first use
-4. **File validation** — MIME type + size checked before processing
-5. **UUID filenames** — Uploaded files stored with random UUIDs, not user-supplied names
-6. **SQL injection prevention** — SQLAlchemy ORM with parameterized queries
-7. **CORS restrictions** — Only whitelisted origins allowed
-8. **Secrets in env vars** — All sensitive config in `.env`, never hardcoded
-9. **HF API key** — Stored in `.env`, never exposed to frontend
+1. **Passwordless Auth**: OTP-only flow minimizes the attack surface for credential stuffing.
+2. **Stateless JWT**: Tokens are signed with `HS256` and stored in `localStorage` with auto-injection into headers.
+3. **Strict Validation**: Files are checked for magic-byte headers and a hard **50MB limit** before reaching the parser.
+4. **Isolated Storage**: Each user's documents and FAISS indexes are stored in unique, UUID-named subdirectories.
+5. **ORM Safety**: All database interactions use SQLAlchemy 2.0's parameterized async queries to prevent SQLi.
+6. **Rate Limiting**: AI inference calls are wrapped in robust error handling to manage provider-level throttling gracefully.
 
 ---
 
-## HuggingFace Models — API vs Local
+## Frontend Logic & SPA Architecture
 
-All models run via the **HuggingFace Serverless Inference API**.
-No GPU, no downloads, no CUDA setup required.
+DocuChat uses a **Vanilla JS Single-Page Application (SPA)** architecture. This ensures high performance and zero framework overhead.
 
-| Model | Task | API Endpoint Used |
-|-------|------|-------------------|
-| `facebook/bart-large-cnn` | Summarization | `client.summarization()` |
-| `google/flan-t5-large` | Q&A / Chat | `client.text_generation()` |
-| `sentence-transformers/all-MiniLM-L6-v2` | Embeddings | `client.feature_extraction()` |
-
-### Local vs API trade-offs
-
-| Factor | Local Models | HF Inference API |
-|--------|-------------|-----------------|
-| Storage | ~10 GB | 0 bytes |
-| RAM | 8–16 GB | <512 MB |
-| Setup time | 20–40 min | <1 min |
-| Latency | Fast (after load) | ~1–3 s per call |
-| Free tier | Unlimited | ~1,000 req/day |
-| GPU needed | Recommended | No |
-
-**Free tier** is sufficient for development and light usage.
-For production, consider HF Pro ($9/mo) or pay-per-use Inference Endpoints.
+-   **State Management**: `dashboard.js` maintains the active state (current `chat_id`, `file_id`, and `history`) in memory. 
+-   **API Client**: `api.js` acts as a centralized fetch wrapper that automatically injects JWT tokens into the `Authorization` header and handles global error states (like 401 Unauthorized).
+-   **Component Logic**:
+    -   `sidebar.js`: Manages real-time filtering of chat history and file lists.
+    -   `upload.js`: Handles drag-and-drop events and chunked upload monitoring.
+    -   `chat.js`: Uses a custom Markdown renderer to transform AI responses into formatted blocks (code, bold, lists).
+-   **Theme Engine**: The UI uses a system of **CSS Variables** defined in `global.css`, allowing for instant switching between light/dark modes and enabling the signature "glassmorphism" aesthetic.
 
 ---
 
-## Deployment Options
+## DevOps & Persistence Layout
 
-### Option A — Local Development
-```bash
-cp .env.example .env      # Fill in HF_API_KEY, EMAIL_*, SECRET_KEY
-pip install -r requirements.txt
+In production (Docker), the system maintains a strict separation between code and state using volumes:
 
-# Terminal 1 — Backend
-uvicorn backend.main:app --reload --port 8000
-
-# Terminal 2 — Frontend
-cd frontend && python -m http.server 3000
-# Open: http://localhost:3000/pages/index.html
+```text
+/app/
+├── backend/ (Code)
+├── frontend/ (Code)
+└── data/ (Persistent Volume)
+    ├── docuchat.db           # SQLite Database
+    ├── uploads/              # Per-user document storage
+    │   └── {user_id}/
+    │       ├── {uuid}.pdf    # Raw original file
+    │       ├── {uuid}.faiss  # Vector index
+    │       └── {uuid}.chunks # Raw text chunks
+    └── logs/                 # System and error logs
 ```
 
-### Option B — Docker Compose (Recommended for production)
-```bash
-cp .env.example .env      # Fill in your values
-docker-compose up -d
-# Frontend: http://localhost:3000
-# Backend API: http://localhost:8000/docs
-```
+---
 
-### Option C — Railway / Render
-1. Push to GitHub
-2. Connect repo to Railway or Render
-3. Set environment variables in dashboard (`HF_API_KEY`, `SECRET_KEY`, etc.)
-4. Deploy — they handle the rest
+## Model Resilience Strategy
 
-### Option D — VPS (Ubuntu)
-```bash
-sudo apt install python3.11 tesseract-ocr nginx
-git clone <your-repo> && cd docuchat
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env && nano .env  # Fill in values
+The `ai_engine.py` implements a **fail-safe inference chain**:
 
-# Run with gunicorn
-gunicorn backend.main:app -w 4 -k uvicorn.workers.UvicornWorker
-```
+1.  **Primary Attempt**: Request is sent to the top-tier Groq model (e.g., Llama 3.3 70B).
+2.  **Tier-2 Rotation**: If a `429` (Rate Limit) or `503` is received, the engine automatically cycles to the next model in the `GROQ_MODELS` list (Llama 3.1 8B, Qwen, etc.).
+3.  **HF Fallback**: For summarization, if all Groq models are exhausted, the system falls back to the **HuggingFace BART** model to ensure the user still receives an answer.
+4.  **Graceful Degradation**: If the network is entirely down, the UI renders a cached error message with instructions to wait for the rate-limit window to reset.
+
+---
+
+## AI Engine Model Strategy
+
+The `ai_engine.py` module manages an aggressive **Token-Limit Rotation** to maximize free-tier availability:
+
+| Task | Primary Model | Provider |
+| :--- | :--- | :--- |
+| **Chat / Q&A** | `llama-3.1-8b-instant` | Groq |
+| **Summarization** | `llama-3.3-70b-versatile` | Groq |
+| **Embeddings** | `all-MiniLM-L6-v2` | HuggingFace |
+| **Fallback Sum** | `bart-large-cnn` | HuggingFace |
+
+**Rotation Order**: `meta-llama/llama-4-scout` → `qwen3-32b` → `llama-3.3-70b` → `llama-3.1-8b`.
+
+---
+
+## Technical Stack
+
+*   **Backend**: Python 3.12, FastAPI, SQLAlchemy 2.0 (Async), Pydantic v2.
+*   **Security**: PyJWT (HS256), Passlib (Bcrypt), Async SMTP (aiosmtplib).
+*   **Vector Engine**: FAISS-cpu (local index math), NumPy.
+*   **Parsing**: PyMuPDF, python-docx, Pytesseract OCR.
+*   **Frontend**: Vanilla JS (ES Modules), Modern CSS Variables, HTML5.
+*   **Infrastructure**: Docker, Docker Compose, Nginx (Reverse Proxy).
 
 ---
 
 ## Future Improvements
 
-| Feature | Description | Effort |
-|---------|-------------|--------|
-| Voice Input | Web Speech API → text input | Low |
-| Streaming Responses | Server-Sent Events for word-by-word output | Medium |
-| Collaborative Rooms | Share a chat session with team members | High |
-| Fine-tuned Models | Domain-specific models via HF Inference Endpoints | Medium |
-| Browser Extension | Chat with any webpage | High |
-| Admin Dashboard | Usage analytics, user management | Medium |
-| Slack / Notion Integration | Post summaries directly | Medium |
-| Document Comparison | "Compare doc A and doc B" | Medium |
-| PostgreSQL Migration | Switch from SQLite for multi-user production | Low |
+*   **[Medium] Streaming SSE**: Fully implement word-by-word streaming in the UI for smoother UX.
+*   **[High] Multi-Document Context**: Allow querying across multiple selected documents simultaneously.
+*   **[Low] PostgreSQL Migration**: Full Supabase integration for highly scalable production clusters.
+*   **[Medium] Semantic Caching**: Cache common questions to reduce API costs and latency.
+*   **[Low] Dark Mode Sync**: OS-level theme detection and synchronization.
+
+---
+
+## Technical Appendix: Core Modules
+
+### 1. Asynchronous Task Processing
+To maintain a responsive UI, DocuChat leverages FastAPI's `BackgroundTasks` for heavy computations:
+-   **Summarization**: When a user uploads a 50MB file, the text extraction and Map-Reduce synthesis run in an isolated async thread.
+-   **Email Delivery**: OTP delivery is non-blocking; the API returns a success message immediately while the SMTP handshake completes in the background.
+
+### 2. Document Parsing & OCR Logic
+The `document_parser.py` follows a "Best-Effort" extraction strategy:
+1.  **Digital Extraction**: Attempts to pull metadata and text streams using `PyMuPDF`.
+2.  **Layout Analysis**: For `.docx`, it preserves basic heading structures to improve chunking context.
+3.  **OCR Fallback**: If a PDF contains no selectable text (scanned image), the system automatically triggers **Tesseract OCR** to digitize the content before passing it to the RAG pipeline.
+
+### 3. Environmental Bridge (`config.py`)
+The system follows "12-Factor App" principles. `backend/config.py` acts as a central authority:
+-   **Validation**: Uses Pydantic-style checks to ensure `GROQ_API_KEY` is present before the app starts.
+-   **Dynamic Limits**: `MAX_FILE_SIZE_MB` and `JWT_EXPIRY` can be adjusted without changing code, simply by updating the `.env` file and restarting the container.
+
+### 4. Logging & Diagnostics
+Structured logging is enabled across all service layers:
+-   **Audit Logs**: Tracks user uploads and AI interactions (anonymized).
+-   **Error Tracking**: Detailed tracebacks are captured in `data/logs/error.log` for troubleshooting Docker deployment issues.
