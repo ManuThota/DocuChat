@@ -459,14 +459,13 @@ async function saveProfile() {
 
 if (saveProfileBtn) {
   saveProfileBtn.addEventListener('click', async () => {
-    // Optimistic UI: Close immediately
-    profileOverlay.classList.add('saving'); // Optional: show a small saving state
+    // Optimistic UI: Close and show toast immediately
     profileOverlay.classList.remove('open');
+    showToast('Profile updated successfully!', 'success');
     try {
       await saveProfile();
-      showToast('Profile updated successfully!', 'success');
     } catch (err) {
-      // Re-open if failed? Usually better to just toast.
+      // toast shown in saveProfile for errors
     }
   });
 }
@@ -565,11 +564,11 @@ async function savePersonalization() {
 
 if (savePersonalizationBtn) {
   savePersonalizationBtn.addEventListener('click', async () => {
-    // Close immediately for instant feel
+    // Optimistic UI: Close and show toast immediately
     personalizationOverlay.classList.remove('open');
+    showToast('Preferences applied successfully!', 'success');
     try {
       await savePersonalization();
-      showToast('Preferences applied successfully!', 'success');
     } catch (err) {
       // toast shown in savePersonalization
     }
@@ -764,13 +763,6 @@ async function sendMessage() {
     }
   }
 
-  // 2.1 Optimistic Title Update (Instant name generation)
-  if (chatTitle.textContent === 'New Chat' || !chatTitle.textContent) {
-    const words = content.split(' ').slice(0, 5).join(' ');
-    const displayTitle = words.length > 30 ? words.substring(0, 27) + '...' : words;
-    chatTitle.textContent = displayTitle;
-    sidebar.updateChatTitleOptimistically(activeChatId, displayTitle);
-  }
 
   const language = document.getElementById('languageSelect').value;
   const fileId = uploader.getActiveFileId();
@@ -862,24 +854,29 @@ async function sendMessage() {
       
     }
 
-    // After completion, update UI state (flicker-free)
-    await sidebar.refresh();
-    sidebar.setActive(activeChatId);
-    
-    // 3. Optional: Refine title from DB only if it's better than our instant one
-    try {
-      const chatData = await ChatAPI.getChat(activeChatId);
-      if (chatData && chatData.title && chatData.title !== 'New Chat') {
-        // Only update if it's not a generic "Initial Greeting" or similar downgrade
-        const isGeneric = ['initial greeting', 'greeting', 'start conversation'].includes(chatData.title.toLowerCase());
-        if (!isGeneric || chatTitle.textContent === 'New Chat') {
+    // After completion, update UI state (Fast-Poll for backend title)
+    const pollTitle = async (attempts = 5) => {
+      try {
+        const chatData = await ChatAPI.getChat(activeChatId);
+        if (chatData && chatData.title && chatData.title !== 'New Chat') {
+          // Update both sections simultaneously as soon as it's ready
           chatTitle.textContent = chatData.title;
           sidebar.updateChatTitleOptimistically(activeChatId, chatData.title);
+          sidebar.refresh(); // Sync full state
+          return;
         }
+        if (attempts > 0) {
+          setTimeout(() => pollTitle(attempts - 1), 800);
+        } else {
+          sidebar.refresh();
+        }
+      } catch (e) {
+        sidebar.refresh();
       }
-    } catch (e) {
-      console.error("Failed to update chat header:", e);
-    }
+    };
+
+    sidebar.setActive(activeChatId);
+    pollTitle();
   } catch (err) {
     if (typingEl) typingEl.remove();
     showToast(err.message || 'Failed to send message.', 'error');
