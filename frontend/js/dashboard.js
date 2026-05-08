@@ -614,7 +614,7 @@ async function loadChat(chatId, title) {
   
   exportBtn.style.display = 'flex';
   document.documentElement.style.removeProperty('--welcome-display');
-  welcomeScreen.style.display = 'none';
+  welcomeScreen.style.display = 'flex'; // Show welcome by default since we are clearing messages
   document.querySelectorAll('.message').forEach(m => m.remove());
   sidebar.setActive(chatId);
   
@@ -628,8 +628,12 @@ async function loadChat(chatId, title) {
   // 2. Instant Render from Cache
   if (chatCache[chatId]) {
     const cached = chatCache[chatId];
-    cached.messages.forEach(m => appendMessage(chatInner, m.role, m.content));
-    if (cached.messages.length === 0) welcomeScreen.style.display = 'flex';
+    if (cached.messages && cached.messages.length > 0) {
+      welcomeScreen.style.display = 'none';
+      cached.messages.forEach(m => appendMessage(chatInner, m.role, m.content));
+    } else {
+      welcomeScreen.style.display = 'flex';
+    }
     scrollToBottom();
   }
 
@@ -665,8 +669,12 @@ async function loadChat(chatId, title) {
       
       if (!isIdentical) {
         document.querySelectorAll('.message').forEach(m => m.remove());
-        data.messages.forEach(m => appendMessage(chatInner, m.role, m.content));
-        if (data.messages.length === 0) welcomeScreen.style.display = 'flex';
+        if (data.messages && data.messages.length > 0) {
+          welcomeScreen.style.display = 'none';
+          data.messages.forEach(m => appendMessage(chatInner, m.role, m.content));
+        } else {
+          welcomeScreen.style.display = 'flex';
+        }
         scrollToBottom();
       }
 
