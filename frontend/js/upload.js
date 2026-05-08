@@ -217,6 +217,9 @@ export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, ac
       } else {
         renderDocCards(cached, chatId);
       }
+    } else {
+      // Clear panel immediately if no cache to prevent "ghost documents" from previous chat
+      filesPanel.innerHTML = '<div class="doc-empty">Loading documents...</div>';
     }
 
     try {
@@ -255,6 +258,15 @@ export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, ac
       </div>
     `).join('')}</div>`;
 
+    // Sync active document name if one is selected
+    if (activeFileId) {
+      const activeFile = files.find(f => String(f.id) === String(activeFileId));
+      if (activeFile) {
+        activeDocName.textContent = activeFile.original_name;
+        activeDocBadge.style.display = 'flex';
+      }
+    }
+
     // Select card
     filesPanel.querySelectorAll('.doc-card').forEach(card => {
       card.addEventListener('click', (e) => {
@@ -275,7 +287,9 @@ export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, ac
           activeFileId = id;
           activeDocName.textContent = name;
           activeDocBadge.style.display = 'flex';
-          if (chatId) localStorage.setItem(`activeFile_${chatId}`, id);
+          if (chatId) {
+            localStorage.setItem(`activeFile_${chatId}`, JSON.stringify({ id, name }));
+          }
           cards.forEach(c => c.classList.remove('selected'));
           card.classList.add('selected');
         }
@@ -297,10 +311,36 @@ export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, ac
     filesPanel.querySelectorAll('.doc-card').forEach(c => c.classList.remove('selected'));
   }
 
+  function clear() {
+    deselect();
+    filesPanel.innerHTML = '<div class="doc-empty">Select a chat to see its documents.</div>';
+  }
+
+  function setSelectedFileId(id, name = null) {
+    activeFileId = id;
+    if (id) {
+      activeDocBadge.style.display = 'flex';
+      if (name) activeDocName.textContent = name;
+      
+      // Find card and select it if it exists in DOM, and update name if found (more accurate)
+      filesPanel.querySelectorAll('.doc-card').forEach(c => {
+        const isTarget = String(c.dataset.id) === String(id);
+        c.classList.toggle('selected', isTarget);
+        if (isTarget) {
+          activeDocName.textContent = c.dataset.name || 'Document';
+        }
+      });
+    } else {
+      activeDocBadge.style.display = 'none';
+    }
+  }
+
   return {
     getActiveFileId: () => activeFileId,
     deselect,
+    clear,
     loadFilesForChat,
+    setSelectedFileId
   };
 }
 

@@ -618,14 +618,14 @@ async function loadChat(chatId, title) {
   document.querySelectorAll('.message').forEach(m => m.remove());
   sidebar.setActive(chatId);
   
-  // If it's a temporary optimistic chat, skip fetching from DB
+  // 1. Handle Temporary Chats (Optimistic New Chat)
   if (typeof chatId === 'string' && chatId.startsWith('temp_')) {
     welcomeScreen.style.display = 'flex';
-    uploader.deselect();
+    uploader.clear(); // Reset document panel immediately
     return;
   }
 
-  // 1. Instant Render from Cache
+  // 2. Instant Render from Cache
   if (chatCache[chatId]) {
     const cached = chatCache[chatId];
     cached.messages.forEach(m => appendMessage(chatInner, m.role, m.content));
@@ -633,14 +633,31 @@ async function loadChat(chatId, title) {
     scrollToBottom();
   }
 
+  // 3. Sync Active File early (Instant selection from localStorage)
+  const saved = localStorage.getItem(`activeFile_${chatId}`);
+  if (saved) {
+    if (saved.startsWith('{')) {
+      try {
+        const { id, name } = JSON.parse(saved);
+        uploader.setSelectedFileId(id, name);
+      } catch (e) {
+        uploader.setSelectedFileId(saved);
+      }
+    } else {
+      uploader.setSelectedFileId(saved);
+    }
+  } else {
+    uploader.deselect();
+  }
+
   try {
-    // 2. Background Refresh (Parallelize loading content and files)
+    // 4. Background Refresh
     const [data] = await Promise.all([
       ChatAPI.getChat(chatId),
       uploader.loadFilesForChat(chatId)
     ]);
     
-    // 3. Update UI only if data is different or we don't have cache yet
+    // 5. Update UI only if state is still valid and data changed
     if (activeChatId === chatId) {
       const oldData = chatCache[chatId];
       const isIdentical = oldData && 
@@ -649,27 +666,15 @@ async function loadChat(chatId, title) {
       if (!isIdentical) {
         document.querySelectorAll('.message').forEach(m => m.remove());
         data.messages.forEach(m => appendMessage(chatInner, m.role, m.content));
-        
-        if (data.messages.length === 0) {
-          welcomeScreen.style.display = 'flex';
-        }
+        if (data.messages.length === 0) welcomeScreen.style.display = 'flex';
         scrollToBottom();
       }
 
-      // Update Cache for future
-      chatCache[chatId] = data;
-      
-      const lastFileId = localStorage.getItem(`activeFile_${chatId}`);
-      if (lastFileId) {
-        const card = document.querySelector(`.doc-card[data-id="${lastFileId}"]`);
-        if (card) card.click();
-      } else {
-        uploader.deselect();
-      }
+      chatCache[chatId] = data; // Update cache
     }
   } catch (err) {
     if (!chatCache[chatId]) {
-      showToast('Failed to load chat.', 'error');
+      showToast('Failed to load chat history.', 'error');
       resetChatView();
     }
   }
@@ -685,7 +690,7 @@ if (newChatBtn) {
     exportBtn.style.display = 'flex';
     document.querySelectorAll('.message').forEach(m => m.remove());
     welcomeScreen.style.display = 'flex';
-    uploader.deselect();
+    uploader.clear();
     
     // 2. Add to sidebar immediately (Optimistic UI)
     sidebar.addChatOptimistically({ id: tempId, title: 'New Chat' });
@@ -1216,6 +1221,8 @@ async function initDashboard() {
     
     // 2. Populate UI state
     const user = initData.user;
+    cachedProfile = user; // Set cache for zero-lag profile modal opening
+    
     if (userBlock) {
       const nameEl = userBlock.querySelector('.user-name');
       const mailEl = userBlock.querySelector('.user-email');
