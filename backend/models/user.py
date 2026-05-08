@@ -35,14 +35,14 @@ class User(Base):
 
     __tablename__ = "app_users"
 
-    id:            Mapped[int]       = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id:            Mapped[int]       = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
     email:         Mapped[str]       = mapped_column(String(255), unique=True, nullable=False, index=True)
     name:          Mapped[str | None] = mapped_column(String(100), nullable=True)
     gender:        Mapped[str | None] = mapped_column(String(20), nullable=True) # 'male' | 'female' | 'other'
     profession:    Mapped[str | None] = mapped_column(String(100), nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)   # bcrypt hash
-    is_active:     Mapped[bool]      = mapped_column(Boolean, default=False)         # True after OTP verify
-    created_at:    Mapped[datetime]  = mapped_column(DateTime, server_default=func.now())
+    is_active:     Mapped[bool]      = mapped_column(Boolean, default=False, index=True)         # True after OTP verify
+    created_at:    Mapped[datetime]  = mapped_column(DateTime, server_default=func.now(), index=True)
 
     # Relationships
     chats: Mapped[list[Chat]] = relationship(
@@ -64,12 +64,12 @@ class OTPRecord(Base):
 
     __tablename__ = "app_otp_records"
 
-    id:         Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id:         Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
     email:      Mapped[str]      = mapped_column(String(255), nullable=False, index=True)
     otp_code:   Mapped[str]      = mapped_column(String(6), nullable=False)
-    is_used:    Mapped[bool]     = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    is_used:    Mapped[bool]     = mapped_column(Boolean, default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
 
 
 class UserPreferences(Base):
@@ -77,9 +77,9 @@ class UserPreferences(Base):
 
     __tablename__ = "app_user_preferences"
 
-    id:           Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id:           Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
     user_id:      Mapped[int] = mapped_column(
-        Integer, ForeignKey("app_users.id", ondelete="CASCADE"), unique=True, nullable=False
+        Integer, ForeignKey("app_users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True
     )
     language:     Mapped[str] = mapped_column(String(20), default="English")
     theme:        Mapped[str] = mapped_column(String(10), default="dark")

@@ -27,12 +27,12 @@ class UploadedFile(Base):
 
     __tablename__ = "app_uploaded_files"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
     user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("app_users.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("app_users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     chat_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("app_chats.id", ondelete="CASCADE"), nullable=True
+        Integer, ForeignKey("app_chats.id", ondelete="CASCADE"), nullable=True, index=True
     )
     original_name: Mapped[str] = mapped_column(String(255), nullable=False)
     stored_name: Mapped[str] = mapped_column(String(255), nullable=False)  # UUID-based filename
@@ -40,7 +40,7 @@ class UploadedFile(Base):
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)        # bytes
     extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     faiss_index_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
 
     # Relationships
     user: Mapped[User] = relationship("User", back_populates="uploaded_files")

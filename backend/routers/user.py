@@ -37,6 +37,9 @@ class ProfileUpdate(BaseModel):
     current_password: str | None = None
     new_password:     str | None = None
 
+from backend.models.chat import Chat
+from backend.models.file import UploadedFile
+
 @router.get("/profile")
 async def get_profile(
     current_user: User        = Depends(get_current_user),
@@ -64,6 +67,51 @@ async def get_profile(
             "summary_mode":     prefs.summary_mode     if prefs else "short",
             "auto_delete_docs": prefs.auto_delete_docs if prefs else False,
         },
+    }
+
+@router.get("/init")
+async def get_dashboard_init(
+    current_user: User        = Depends(get_current_user),
+    db:           AsyncSession = Depends(get_db),
+):
+    """Combined endpoint to fetch everything needed for dashboard init in one round-trip."""
+    # Fetch User + Prefs
+    user_result = await db.execute(
+        select(User).options(selectinload(User.preferences)).where(User.id == current_user.id)
+    )
+    user = user_result.scalar_one()
+
+    # Fetch Chats (limit to 50 for performance as recommended)
+    chats_result = await db.execute(
+        select(Chat)
+        .where(Chat.user_id == current_user.id)
+        .order_by(Chat.updated_at.desc())
+        .limit(50)
+    )
+    chats = chats_result.scalars().all()
+
+    # Fetch Files
+    files_result = await db.execute(
+        select(UploadedFile).where(UploadedFile.user_id == current_user.id).order_by(UploadedFile.created_at.desc())
+    )
+    files = files_result.scalars().all()
+
+    return {
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "gender": user.gender,
+            "profession": user.profession,
+            "preferences": {
+                "theme": user.preferences.theme if user.preferences else "dark",
+                "language": user.preferences.language if user.preferences else "English",
+                "summary_mode": user.preferences.summary_mode if user.preferences else "short",
+                "auto_delete_docs": user.preferences.auto_delete_docs if user.preferences else False,
+            }
+        },
+        "chats": [{"id": c.id, "title": c.title, "updated_at": c.updated_at.isoformat(), "is_archived": c.is_archived, "is_hidden": c.is_hidden} for c in chats],
+        "files": [{"id": f.id, "original_name": f.original_name, "chat_id": f.chat_id, "file_type": f.file_type} for f in files]
     }
 
 @router.patch("/profile")

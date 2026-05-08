@@ -587,36 +587,8 @@ if (closePersonalizationBtn) {
 }
 
 // ─── Sidebar (chat history) ───────────────────────────────────────────────
-const sidebar = initSidebar({
-  listEl:          document.getElementById('chatHistoryList'),
-  searchInput:     document.getElementById('chatSearchInput'),
-  getActiveChatId: () => activeChatId,
-  showToast,
-  onChatSelect:    (id, title) => {
-    if (document.body.classList.contains('selection-mode')) {
-      showToast('Please select the messages in this chat or cancel selection mode first.', 'warning');
-      return false;
-    }
-    loadChat(id, title);
-  },
-  onChatDelete:    (id)        => { if (activeChatId === id) resetChatView(); },
-});
-
-// ─── Upload controller ────────────────────────────────────────────────────
-const uploader = initUpload({
-  dropZone, fileInput, filesPanel, activeDocBadge, activeDocName, showToast,
-  onUpload: (result) => console.log('File uploaded:', result.original_name),
-  getActiveChatId: () => activeChatId,
-  onNewChatCreated: async (chat) => {
-    activeChatId = chat.id;
-    chatTitle.textContent = 'New Chat';
-    exportBtn.style.display = 'flex';
-    welcomeScreen.style.display = 'flex';
-    sidebar.setActive(activeChatId);
-    await sidebar.refresh();
-  }
-});
-// uploader.restore() is no longer needed here as loadChat handles it per-chat
+let sidebar  = null;
+let uploader = null;
 
 // ─── Load a chat (open from sidebar) ──────────────────────────────────────
 const chatDrafts = {};
@@ -1236,25 +1208,91 @@ function resetChatView() {
   }
 }
 
-// ─── Init: restore theme ──────────────────────────────────────────────────
-const savedTheme = localStorage.getItem('docuchat_theme') || 'dark';
-document.documentElement.setAttribute('data-theme', savedTheme);
-if (themeSelect) themeSelect.value = savedTheme;
-// Restore session on load
-window.addEventListener('DOMContentLoaded', () => {
-  const savedId = localStorage.getItem('activeChatId');
-  const savedTitle = localStorage.getItem('activeChatTitle');
-  if (savedId && savedTitle) {
-    // Attempt to load multiple times if needed to ensure history is ready
-    let attempts = 0;
-    const restore = setInterval(() => {
-      const item = document.getElementById(`chat-item-${savedId}`);
-      if (item || attempts > 10) {
-        loadChat(parseInt(savedId), savedTitle);
-        if (sidebar && sidebar.setActive) sidebar.setActive(parseInt(savedId));
-        clearInterval(restore);
+// ─── Init Dashboard ───────────────────────────────────────────────────────
+async function initDashboard() {
+  try {
+    // 1. Fetch EVERYTHING in one round-trip (Super-Endpoint)
+    const initData = await UserAPI.getInit();
+    
+    // 2. Populate UI state
+    const user = initData.user;
+    if (userBlock) {
+      const nameEl = userBlock.querySelector('.user-name');
+      const mailEl = userBlock.querySelector('.user-email');
+      if (nameEl) nameEl.textContent = user.name || 'User';
+      if (mailEl) mailEl.textContent = user.email;
+    }
+
+    // Set initial profile state for unsaved changes detection
+    initialProfileState = {
+      name: user.name || '',
+      gender: user.gender || '',
+      profession: user.profession || ''
+    };
+    if (profileNameInput) profileNameInput.value = user.name || '';
+    if (profileGenderSelect) profileGenderSelect.value = user.gender || 'male';
+    if (profileProfessionSelect) profileProfessionSelect.value = user.profession || 'Other';
+    if (profileEmailInput) profileEmailInput.value = user.email;
+
+    // Apply and set preferences
+    const prefs = user.preferences;
+    document.documentElement.setAttribute('data-theme', prefs.theme);
+    if (themeSelectDropdown) themeSelectDropdown.value = prefs.theme;
+    if (defaultSummarySelect) defaultSummarySelect.value = prefs.summary_mode;
+    if (autoDetectToggle) autoDetectToggle.checked = true; // Default or from data
+    if (privacyDeleteToggle) privacyDeleteToggle.checked = prefs.auto_delete_docs;
+    
+    // 3. Initialize Controllers with pre-fetched data
+    sidebar = initSidebar({
+      listEl: document.getElementById('chatHistoryList'),
+      searchInput: document.getElementById('chatSearch'),
+      getActiveChatId: () => activeChatId,
+      showToast,
+      onChatSelect: (id, title) => loadChat(id, title),
+      onChatDelete: (id) => { if (activeChatId === id) resetChatView(); },
+      initialData: initData.chats
+    });
+
+    uploader = initUpload({
+      dropZone, fileInput, filesPanel, activeDocBadge, activeDocName, showToast,
+      onUpload: (result) => console.log('File uploaded:', result.original_name),
+      getActiveChatId: () => activeChatId,
+      onNewChatCreated: async (chat) => {
+        activeChatId = chat.id;
+        chatTitle.textContent = 'New Chat';
+        exportBtn.style.display = 'flex';
+        welcomeScreen.style.display = 'flex';
+        sidebar.setActive(activeChatId);
+        await sidebar.refresh();
+      },
+      initialData: initData.files
+    });
+
+    // Make controllers globally accessible for other functions
+    window.sidebar = sidebar;
+    window.uploader = uploader;
+
+    // 4. Restore last session
+    const savedId = localStorage.getItem('activeChatId');
+    const savedTitle = localStorage.getItem('activeChatTitle');
+    if (savedId && savedTitle) {
+      const chatIdInt = parseInt(savedId, 10);
+      const exists = initData.chats.some(c => c.id === chatIdInt);
+      if (exists) {
+        loadChat(chatIdInt, savedTitle);
+        sidebar.setActive(chatIdInt);
+      } else {
+        resetChatView();
       }
-      attempts++;
-    }, 200);
+    } else {
+      resetChatView();
+    }
+
+  } catch (err) {
+    console.error('Dashboard init failed:', err);
+    showToast('Failed to initialize dashboard. Please reload.', 'error');
   }
-});
+}
+
+// Start initialization
+window.addEventListener('DOMContentLoaded', initDashboard);

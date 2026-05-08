@@ -27,16 +27,16 @@ class Chat(Base):
 
     __tablename__ = "app_chats"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
     user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("app_users.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("app_users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     title: Mapped[str] = mapped_column(String(255), default="New Chat")
-    is_archived: Mapped[bool] = mapped_column(default=False)
-    is_hidden: Mapped[bool] = mapped_column(default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    is_archived: Mapped[bool] = mapped_column(default=False, index=True)
+    is_hidden: Mapped[bool] = mapped_column(default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), onupdate=func.now()
+        DateTime, server_default=func.now(), onupdate=func.now(), index=True
     )
 
     # Relationships
@@ -54,12 +54,12 @@ class Message(Base):
 
     __tablename__ = "app_messages"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
     chat_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("app_chats.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("app_chats.id", ondelete="CASCADE"), nullable=False, index=True
     )
     role: Mapped[str] = mapped_column(String(10), nullable=False)  # 'user' | 'assistant'
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
 
     chat: Mapped["Chat"] = relationship("Chat", back_populates="messages")

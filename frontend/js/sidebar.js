@@ -13,11 +13,19 @@ const ICONS = {
 
 };
 
-export function initSidebar({ listEl, searchInput, getActiveChatId, showToast, onChatSelect, onChatDelete }) {
-  let allChats = [];
+export function initSidebar({ listEl, searchInput, getActiveChatId, showToast, onChatSelect, onChatDelete, initialData = null }) {
+  let allChats = initialData || [];
   let openMenuId = null;
   let pendingAction = null; // { id, title, type }
   let searchQuery = '';
+
+  if (initialData) {
+    // Render immediately if we have data from super-endpoint
+    render(allChats);
+  } else {
+    // Fallback: fetch manually if no init data provided
+    refresh();
+  }
 
   if (searchInput) {
     searchInput.addEventListener('input', (e) => {
@@ -49,8 +57,6 @@ export function initSidebar({ listEl, searchInput, getActiveChatId, showToast, o
     if (openMenuId) closeMenu();
   });
 
-  // Load chats immediately
-  refresh();
 
   async function refresh() {
     try {

@@ -4,8 +4,20 @@
 
 import { UploadAPI, ChatAPI } from './api.js';
 
-export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, activeDocName, showToast, onUpload, getActiveChatId, onNewChatCreated }) {
+export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, activeDocName, showToast, onUpload, getActiveChatId, onNewChatCreated, initialData = null }) {
   let activeFileId = null;
+  let currentLoadChatId = null;
+  const docCache = {}; // Cache doc list per chat
+
+  if (initialData) {
+    // Populate cache with files from super-endpoint
+    initialData.forEach(f => {
+      if (f.chat_id) {
+        if (!docCache[f.chat_id]) docCache[f.chat_id] = [];
+        docCache[f.chat_id].push(f);
+      }
+    });
+  }
 
   // ─── Delete modal state ───────────────────────────────────────────────────
   let pendingDeleteId   = null;
@@ -193,8 +205,6 @@ export function initUpload({ dropZone, fileInput, filesPanel, activeDocBadge, ac
 
 
   // ─── Load files for a specific chat ──────────────────────────────────────
-  let currentLoadChatId = null;
-  const docCache = {}; // Cache doc list per chat
 
   async function loadFilesForChat(chatId) {
     currentLoadChatId = chatId;

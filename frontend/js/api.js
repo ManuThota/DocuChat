@@ -202,6 +202,7 @@ export const ExportAPI = {
 
 export const UserAPI = {
   getProfile:        () => apiFetch('/user/profile'),
+  getInit:           () => apiFetch('/user/init'),
   patchProfile:      (body) => apiFetch('/user/profile', { method: 'PATCH', body: JSON.stringify(body) }),
   updatePreferences: (prefs) =>
     apiFetch('/user/preferences', { method: 'PATCH', body: JSON.stringify(prefs) }),
