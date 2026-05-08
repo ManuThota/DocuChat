@@ -4,8 +4,8 @@
 # Run:     docker run -p 8000:8000 --env-file .env docuchat-backend
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Use slim Python 3.11 — enough for our stack, keeps image small
-FROM python:3.11-slim
+# Use slim Python 3.12 — matching our project spec
+FROM python:3.12-slim
 
 # ─── System dependencies ─────────────────────────────────────────────────────
 # tesseract-ocr: for image OCR (pytesseract)
@@ -31,9 +31,9 @@ RUN pip install --no-cache-dir --upgrade pip \
 COPY backend/ ./backend/
 COPY .env .env
 
-# ─── Uploads directory ────────────────────────────────────────────────────────
-# Mount a volume here in production to persist user files and FAISS indexes
-RUN mkdir -p uploads
+# ─── Storage directories ──────────────────────────────────────────────────────
+# Mount volumes here in production to persist user files, DB, and FAISS indexes
+RUN mkdir -p uploads data
 
 # ─── Expose port ─────────────────────────────────────────────────────────────
 EXPOSE 8000
