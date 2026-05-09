@@ -1,10 +1,14 @@
 """
-backend/utils/file_validator.py — Validate uploaded files before processing.
+backend/utils/file_validator.py — Upload Integrity and Security Gatekeeper.
 
-Checks:
-  - File extension is allowed
-  - MIME type matches the extension (basic validation)
-  - File size does not exceed configured limit
+This module provides robust pre-flight checks for user uploads before they are passed
+to the `document_parser.py` or stored on disk. It prevents malicious or oversized files 
+from entering the processing pipeline.
+
+Validation Checks:
+  1. Extension Whitelisting: Ensures the file extension is one of [.pdf, .docx, .txt, .png, .jpg, .jpeg].
+  2. MIME-Type Verification: Cross-references the extension against its expected Content-Type.
+  3. Size Enforcement: Aborts uploads exceeding the `MAX_FILE_SIZE_MB` defined in environment settings.
 """
 
 from fastapi import UploadFile, HTTPException, status

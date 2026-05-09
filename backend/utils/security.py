@@ -1,9 +1,15 @@
 """
-backend/utils/security.py — JWT token generation/verification and password hashing.
+backend/utils/security.py — Cryptography and Authentication Primitives.
 
-Uses:
-  - PyJWT for stateless JWT tokens (HS256)
-  - passlib[bcrypt] for one-way password hashing
+This module encapsulates all cryptographic operations, ensuring that sensitive data 
+(like passwords) and identity assertions (like JWTs) are handled securely.
+
+Responsibilities:
+  - Password Hashing: Implements one-way hashing using `bcrypt` (via `passlib`).
+    The chosen work factor is slow enough to resist brute-force/rainbow-table attacks, 
+    but fast enough to keep login latency <200ms.
+  - Token Issuance (JWT): Generates stateless JSON Web Tokens (HS256) upon successful login.
+  - Token Verification: Decodes and validates JWT signatures and expiration times to assert identity.
 """
 
 from datetime import datetime, timedelta, timezone

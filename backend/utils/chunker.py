@@ -1,11 +1,17 @@
 """
-backend/utils/chunker.py — Split long text into overlapping chunks for RAG.
+backend/utils/chunker.py — Semantic Text Splitting for RAG.
 
-Strategy:
-  - Split by words (whitespace-delimited tokens)
-  - Each chunk = chunk_size words
-  - Consecutive chunks overlap by `overlap` words so context is not lost
-    at chunk boundaries
+This module provides the logic to divide large documents into smaller, overlapping segments
+(chunks) suitable for vector embedding and retrieval. 
+
+Strategy (Word-Level Overlapping):
+  - The raw document is split into discrete word tokens.
+  - The text is grouped into segments of `chunk_size` words.
+  - To prevent semantic loss at the boundaries, consecutive segments 
+    share `overlap` words.
+
+By maintaining context overlap, the downstream LLM has a higher chance of successfully
+answering queries that span across paragraph or page breaks in the original document.
 """
 
 
