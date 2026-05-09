@@ -1,1 +1,7 @@
-# backend/__init__.py
+"""
+backend/__init__.py — Application Core.
+
+This directory serves as the root for the DocuChat FastAPI backend. 
+It contains the primary application entry point (`main.py`), global configuration logic (`config.py`), 
+and core database connectivity (`database.py`).
+"""

@@ -1,8 +1,12 @@
 """
-backend/config.py — Application settings loaded from environment variables.
+backend/config.py — Global Application Settings.
 
-Uses pydantic-settings to validate and provide typed access to all config.
-Values are read from the .env file at project root.
+This module leverages `pydantic-settings` to provide strongly-typed, validated access to all 
+environment variables. Values are securely loaded from the `.env` file at the project root 
+(or the runtime environment variables in production).
+
+Using a centralized `Settings` class ensures that missing or malformed configuration values 
+are caught immediately at startup rather than causing unexpected runtime crashes.
 """
 
 from functools import lru_cache

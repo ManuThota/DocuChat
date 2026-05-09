@@ -1,11 +1,18 @@
 """
-backend/main.py — DocuChat FastAPI Application Entry Point.
+backend/main.py — FastAPI Application Entry Point.
 
-Run with:
-  uvicorn backend.main:app --reload --port 8000
+This is the main orchestration module for the DocuChat backend. It constructs the `FastAPI` 
+app instance, configures global middleware (like CORS), mounts static file directories, 
+and registers all API routers.
 
-Production:
-  gunicorn backend.main:app -w 4 -k uvicorn.workers.UvicornWorker
+Lifecycle Events:
+  - Startup: Creates database tables, ensures the upload directory exists, and starts 
+             the background cleanup daemon (`auto_delete_old_documents`).
+  - Request Handling: Dispatches incoming HTTP requests to the appropriate router module.
+
+Execution:
+  Development: `uvicorn backend.main:app --reload --port 8000`
+  Production:  `gunicorn backend.main:app -w 4 -k uvicorn.workers.UvicornWorker`
 """
 
 import os

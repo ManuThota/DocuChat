@@ -1,8 +1,14 @@
 """
-backend/database.py — Async SQLAlchemy engine + session factory.
+backend/database.py — Asynchronous Database Orchestration.
 
-Uses aiosqlite for SQLite in dev, asyncpg for PostgreSQL in prod.
-All tables are created on startup via init_db().
+This module is responsible for managing the connection lifecycle between the FastAPI application 
+and the underlying relational database (SQLite for local dev, PostgreSQL/Supabase for production).
+
+Key Components:
+  - Engine: The async SQLAlchemy engine configured with connection pooling.
+  - Session Factory: `AsyncSessionLocal`, used by dependencies to yield isolated database sessions.
+  - Base: The `DeclarativeBase` subclass from which all ORM models inherit.
+  - Initialization: `init_db()` is called during app startup to ensure all tables are created.
 """
 
 from sqlalchemy import text
