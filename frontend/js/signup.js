@@ -1,5 +1,7 @@
 /**
- * frontend/js/signup.js — Entry point for signup page.
+ * frontend/js/signup.js — Entry Point: Account Registration
+ * 
+ * Bootstraps the signup page. Redirects authenticated users to the dashboard.
  */
 
 import { Auth } from './api.js';

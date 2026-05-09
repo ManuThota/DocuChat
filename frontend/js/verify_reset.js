@@ -1,5 +1,7 @@
 /**
- * frontend/js/verify_reset.js — Entry point for password reset verification (OTP).
+ * frontend/js/verify_reset.js — Entry Point: OTP Password Reset Verification
+ * 
+ * Manages the 6-digit code input required before assigning a new password.
  */
 
 import { handleVerifyReset, initOTPInputs } from './auth.js';

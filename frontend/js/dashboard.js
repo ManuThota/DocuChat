@@ -1,5 +1,11 @@
 /**
- * frontend/js/dashboard.js — Dashboard main logic.
+ * frontend/js/dashboard.js — Main Dashboard Orchestration
+ *
+ * The central hub for the authenticated user experience. Responsible for:
+ *   - Session Validation: Booting non-authenticated users back to login.
+ *   - Module Initialization: Bootstrapping the Sidebar, Upload Panel, and Chat Interface.
+ *   - Message Routing: Handling user text input, triggering the Chat API, and appending responses.
+ *   - Context Management: Keeping track of the currently active chat session and document context.
  */
 
 import { Auth, ChatAPI, UserAPI } from './api.js';

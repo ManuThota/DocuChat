@@ -1,5 +1,7 @@
 /**
- * frontend/js/index.js — Entry point for login page.
+ * frontend/js/index.js — Entry Point: Login
+ * 
+ * Bootstraps the login page. Redirects authenticated users to the dashboard.
  */
 
 import { Auth } from './api.js';

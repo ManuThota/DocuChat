@@ -1,5 +1,11 @@
 /**
- * frontend/js/sidebar.js — Sidebar chat history management with custom action modals and SVG icons.
+ * frontend/js/sidebar.js — Sidebar Navigation & History Management
+ *
+ * Controls the left-hand navigation pane of the dashboard. Features:
+ *   - Chat History: Fetching, rendering, renaming, and deleting past sessions.
+ *   - Document Management: Managing context files tied to specific chats.
+ *   - User Profile Actions: Handling the dropdown menu for settings and secure logout.
+ *   - Responsive Design: Toggling the mobile sidebar overlay.
  */
 
 import { ChatAPI } from './api.js';

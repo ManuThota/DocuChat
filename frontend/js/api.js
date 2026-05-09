@@ -1,10 +1,12 @@
 /**
- * frontend/js/api.js — Centralised API client.
+ * frontend/js/api.js — Centralized API Client & Networking Layer
  *
- * All HTTP calls go through here. Handles:
- *   - Base URL configuration
- *   - JWT injection via Authorization header
- *   - Unified error handling (throws on non-2xx)
+ * All HTTP requests to the DocuChat backend pass through this module. 
+ * Responsibilities include:
+ *   - Base URL configuration (auto-detects host environment).
+ *   - JWT Bearer Token injection into Authorization headers.
+ *   - Unified error handling (throwing clean exceptions on non-2xx responses).
+ *   - Exporting grouped API classes (Auth, ChatAPI, UploadAPI, ExportAPI, UserAPI).
  */
 
 // Empty BASE_URL makes all requests relative to the current host (since backend serves frontend)

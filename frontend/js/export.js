@@ -1,11 +1,9 @@
 /**
- * frontend/js/export.js — PDF export handler.
+ * frontend/js/export.js — PDF Generation & Download Handler
  *
- * Calls the /export/pdf endpoint and triggers a browser download.
- *
- * Usage:
- *   import { exportChatPDF } from './export.js';
- *   exportChatPDF(chatId, showToast);
+ * Coordinates with the backend PDF generation endpoint (`/export/pdf`).
+ * Handles the binary Blob response, constructs a temporary ObjectURL, 
+ * and programmatically triggers a browser file download for the user.
  */
 
 import { ExportAPI } from './api.js';

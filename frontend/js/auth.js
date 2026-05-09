@@ -1,9 +1,13 @@
 /**
- * frontend/js/auth.js — Auth flow handlers.
+ * frontend/js/auth.js — Authentication Workflow Controllers
  *
- * LOGIN  (index.html):   email + password → JWT
- * SIGNUP (signup.html):  name + email + password → OTP email sent
- * VERIFY (verify.html):  OTP code → account activated → JWT
+ * Encapsulates the UI logic and API coordination for all identity flows:
+ *   - Login (index.html): Email/Password validation -> JWT storage.
+ *   - Registration (signup.html): Account creation -> OTP email dispatch.
+ *   - Verification (verify.html & verify_reset.html): 6-digit OTP handling.
+ *   - Password Reset: Forgot password -> OTP verification -> New password assignment.
+ *
+ * Interacts directly with `api.js` and updates `sessionStorage` state.
  */
 
 import { Auth } from './api.js';

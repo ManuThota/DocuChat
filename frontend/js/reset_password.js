@@ -1,5 +1,7 @@
 /**
- * frontend/js/reset_password.js — Entry point for password reset page.
+ * frontend/js/reset_password.js — Entry Point: Password Reset
+ * 
+ * Secures the reset flow, requiring a valid token in sessionStorage.
  */
 
 import { handleResetPassword, togglePasswordVisibility } from './auth.js';

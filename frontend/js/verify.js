@@ -1,5 +1,7 @@
 /**
- * frontend/js/verify.js — Entry point for signup verification (OTP).
+ * frontend/js/verify.js — Entry Point: OTP Signup Verification
+ * 
+ * Manages the 6-digit code input and countdown timer for new accounts.
  */
 
 import { handleVerify, handleResend, initOTPInputs, startCountdown } from './auth.js';

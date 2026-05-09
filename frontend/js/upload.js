@@ -1,5 +1,10 @@
 /**
- * frontend/js/upload.js — File upload controller with card-based document UI.
+ * frontend/js/upload.js — Drag-and-Drop Document Processing
+ *
+ * Manages the file upload lifecycle for the RAG pipeline.
+ *   - UI Interactions: Handles drag-over, drop, and file input selection events.
+ *   - API Integration: Submits `FormData` containing the file to the backend parsing engine.
+ *   - State Updates: Refreshes the Sidebar document list upon successful upload and indexing.
  */
 
 import { UploadAPI, ChatAPI } from './api.js';

@@ -1,10 +1,11 @@
 /**
- * frontend/js/chat.js — Chat message rendering utilities.
+ * frontend/js/chat.js — Chat Interface & Markdown Rendering
  *
- * Exports:
- *   appendMessage(container, role, content) → HTMLElement
- *   showTypingIndicator(container) → HTMLElement
- *   autoResize(textarea)
+ * Dedicated utilities for dynamically building the chat UI:
+ *   - Markdown Parsing: Converts AI markdown responses into styled HTML (via marked.js).
+ *   - Syntax Highlighting: Applies highlight.js to code blocks.
+ *   - Typing Indicators: Renders loading states during AI inference.
+ *   - Textarea Auto-resize: Smoothly adjusts the chat input height based on content.
  */
 
 /**

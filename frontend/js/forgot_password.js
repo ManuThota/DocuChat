@@ -1,5 +1,7 @@
 /**
- * frontend/js/forgot_password.js — Entry point for forgot password page.
+ * frontend/js/forgot_password.js — Entry Point: Forgot Password
+ * 
+ * Attaches event listeners to the password recovery form.
  */
 
 import { handleForgotPassword } from './auth.js';
