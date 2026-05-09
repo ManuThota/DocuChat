@@ -3,6 +3,8 @@
 > **Upload. Chat. Summarize. Export.**  
 > A professional, full-stack RAG (Retrieval-Augmented Generation) platform built with a high-performance FastAPI backend and a sleek, modern Vanilla JS dashboard.
 
+**🌐 Live Demo:** [https://docuchat-jy9z.onrender.com](https://docuchat-jy9z.onrender.com)
+
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110-009688)](https://fastapi.tiangolo.com/)
 [![Groq](https://img.shields.io/badge/Groq-Llama_3.1-orange)](https://groq.com/)
