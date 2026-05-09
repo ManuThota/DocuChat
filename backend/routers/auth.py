@@ -1,19 +1,15 @@
 """
-backend/routers/auth.py — Authentication endpoints.
+backend/routers/auth.py — Authentication and Authorization Endpoints.
 
-New auth flow:
+This module exposes the API routes responsible for identity management.
+It handles user registration, email verification (via OTP), session initialization (JWT login),
+and secure password resets.
 
-  SIGNUP (3-step):
-    1. POST /auth/signup        — Submit name + email + password
-                                  → creates inactive account, sends OTP to email
-    2. POST /auth/verify-signup — Submit email + OTP code
-                                  → activates account, returns JWT
-
-  LOGIN (1-step):
-    POST /auth/login            — Submit email + password
-                                  → verifies password hash, returns JWT (no OTP)
-
-  POST /auth/logout             — Informational (client deletes token)
+Authentication State Machine Mapping:
+  - `POST /auth/signup`: Validates input, creates an inactive `User`, triggers OTP generation.
+  - `POST /auth/verify-signup`: Validates OTP, activates the `User`, issues the initial JWT.
+  - `POST /auth/login`: Validates credentials, issues JWT (OTP bypassed for returning users).
+  - `POST /auth/logout`: Provides instructions for the client to discard the stateless JWT.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status

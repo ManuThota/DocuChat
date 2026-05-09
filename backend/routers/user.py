@@ -1,8 +1,10 @@
 """
-backend/routers/user.py — User profile and preferences endpoints.
+backend/routers/user.py — User Profile and Preferences Endpoints.
 
-  GET   /user/profile      — Return current user info + preferences
-  PATCH /user/preferences  — Update language, theme, summary_mode
+This module manages the endpoints for fetching and updating user-specific settings.
+Because preferences (like theme, language) are isolated into a `UserPreferences`
+table, these endpoints can be safely called frequently by the frontend without 
+risking unintended modifications to core security fields in the `User` table.
 """
 
 import os

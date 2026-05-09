@@ -1,7 +1,9 @@
 """
-backend/routers/export.py — PDF export endpoint.
+backend/routers/export.py — PDF Export Endpoints.
 
-  POST /export/pdf — Generate and stream a PDF of the chat conversation
+This module provides functionality to generate downloadable artifacts from user data.
+Currently, it supports compiling an active or archived chat thread into a styled, 
+printable PDF document using ReportLab.
 """
 
 from fastapi import APIRouter, Depends, HTTPException

@@ -1,11 +1,15 @@
 """
-backend/routers/chat.py — Chat session and messaging endpoints.
+backend/routers/chat.py — Chat Session and Messaging Endpoints.
 
-  POST   /chat/new         — Create a new chat session
-  POST   /chat/message     — Send a message, get AI reply (RAG or summarize)
-  GET    /chat/history     — List all chats for the current user
-  GET    /chat/{chat_id}   — Get a single chat + all its messages
-  DELETE /chat/{chat_id}   — Delete a chat and its messages
+This module manages the core conversational interface of DocuChat.
+It handles creating conversation threads, retrieving chat history, deleting sessions,
+and most importantly, coordinating the AI message generation. 
+
+The `/message` and `/message/stream` endpoints act as orchestration layers, tying together:
+1. User input ingestion.
+2. Context retrieval (fetching past messages from DB).
+3. RAG Document lookups (verifying FAISS index paths).
+4. Asynchronous or synchronous AI generation via LLM.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks

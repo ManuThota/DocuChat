@@ -1,8 +1,12 @@
 """
-backend/routers/upload.py — Document upload and indexing endpoints.
+backend/routers/upload.py — Document Ingestion and Indexing Endpoints.
 
-  POST /upload/document — Upload a file, parse text, build FAISS index
-  GET  /upload/files    — List all files uploaded by the current user
+This module handles the multipart-form upload process for user documents.
+It acts as the entry point for the Retrieval-Augmented Generation (RAG) pipeline:
+1. Receives and saves physical files to disk securely.
+2. Triggers text extraction (`extract_text`).
+3. Triggers vector embedding generation (`build_faiss_index`).
+4. Persists the resulting filesystem paths to the `UploadedFile` database model.
 """
 
 import os
