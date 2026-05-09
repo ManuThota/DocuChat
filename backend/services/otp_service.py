@@ -36,20 +36,12 @@ def _generate_otp(length: int = 6) -> str:
 async def generate_and_store_otp(email: str, db: AsyncSession, context: str = "signup") -> str:
     """
     Create a fresh OTP, save it to the database, and email it to the user.
-
-    Args:
-        email: Destination email address.
-        db:    Async database session.
-        context: Context of the OTP ("signup" or "reset").
-
-    Returns:
-        The generated OTP code (for testing / logging — do NOT expose in API response).
     """
     from sqlalchemy import delete
-    now = datetime.now(timezone.utc).replace(tzinfo=None) # Use naive UTC for DB compatibility
+    import traceback
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
-    # 1. Cleanup: Delete all prior OTPs for this specific email
-    # 2. Cleanup: Delete ALL expired OTPs from the database (Global hygiene)
+    # Cleanup
     await db.execute(
         delete(OTPRecord).where(
             (OTPRecord.email == email) | (OTPRecord.expires_at < now)
@@ -68,27 +60,20 @@ async def generate_and_store_otp(email: str, db: AsyncSession, context: str = "s
     db.add(record)
     await db.commit()
 
-    # Send email (best-effort; don't let SMTP errors crash the request)
+    # Send email
     try:
         await _send_otp_email(email, otp_code, context)
     except Exception as exc:
         print(f"[OTP] Email delivery failed for {email}: {exc}")
+        traceback.print_exc()
 
     return otp_code
 
 
 async def verify_otp(email: str, code: str, db: AsyncSession) -> bool:
-    """
-    Check whether the given OTP code is valid for the email address.
-
-    Deletes the code immediately after the attempt (instant cleanup & security).
-
-    Returns:
-        True if valid and not expired, False otherwise.
-    """
+    """Check whether the given OTP code is valid for the email address."""
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     
-    # Fetch the record regardless of expiration to ensure we can delete it after the attempt
     result = await db.execute(
         select(OTPRecord).where(
             OTPRecord.email == email,
@@ -100,10 +85,8 @@ async def verify_otp(email: str, code: str, db: AsyncSession) -> bool:
     if record is None:
         return False
 
-    # Check validity before deleting
     is_valid = record.expires_at > now
 
-    # Delete the record immediately (it's been "validated" now, so it must be gone)
     await db.delete(record)
     await db.commit()
 
@@ -127,6 +110,8 @@ async def _send_otp_email(to_email: str, otp_code: str, context: str) -> None:
     msg["From"] = settings.email_from
     msg["To"] = to_email
 
+    plain_body = f"{title}\n\n{desc}\n\nCode: {otp_code}\n\nIf you didn't request this, you can safely ignore this email."
+    
     html_body = f"""
     <div style="font-family: Inter, sans-serif; max-width: 480px; margin: auto; padding: 32px;
                 background: #121212; border-radius: 16px; color: #f5f5f5; border: 1px solid #262626;">
@@ -145,6 +130,7 @@ async def _send_otp_email(to_email: str, otp_code: str, context: str) -> None:
     </div>
     """
 
+    msg.attach(MIMEText(plain_body, "plain"))
     msg.attach(MIMEText(html_body, "html"))
 
     await aiosmtplib.send(
