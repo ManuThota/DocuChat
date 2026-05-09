@@ -24,9 +24,10 @@ engine_kwargs = {
     "pool_pre_ping": True,
 }
 
-# SQLAlchemy asyncpg dialect requires prepared_statement_cache_size=0 for PgBouncer
+# SQLAlchemy asyncpg dialect requires specific flags to disable prepared statements for PgBouncer
 if settings.database_url.startswith("postgresql+asyncpg"):
-    engine_kwargs["prepared_statement_cache_size"] = 0
+    engine_kwargs["execution_options"] = {"prepared_statement_cache_size": 0}
+    engine_kwargs["connect_args"] = {"statement_cache_size": 0}
 
 engine = create_async_engine(
     settings.database_url,
