@@ -1,8 +1,10 @@
 """
 backend/models/chat.py — Chat session and Message ORM models.
 
-A Chat belongs to a User and contains many Messages.
-Messages have role='user' or role='assistant'.
+This module defines the SQLAlchemy 2.0 ORM models for conversational interactions.
+A `Chat` represents a logical grouping of messages, analogous to a "chat thread" or "session".
+Each `Chat` is owned by exactly one `User` and can contain multiple `Message` objects
+and `UploadedFile` objects associated with that specific session context.
 """
 
 from __future__ import annotations
@@ -15,15 +17,32 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.database import Base
 
-# TYPE_CHECKING is False at runtime — prevents circular imports.
-# Only active when a static type checker (Pylance, mypy) analyses the file.
+# TYPE_CHECKING is False at runtime. We use this pattern to declare type hints
+# for SQLAlchemy relationships without introducing circular import errors during module load.
 if TYPE_CHECKING:
     from backend.models.user import User          # noqa: F401
     from backend.models.file import UploadedFile  # noqa: F401
 
 
 class Chat(Base):
-    """A conversation session. Each user can have many chats."""
+    """
+    Represents a conversational session thread.
+
+    Attributes:
+        id: Primary key, auto-incremented integer.
+        user_id: Foreign key linking to the `app_users` table.
+        title: User-facing name of the chat (e.g., "Resume Review").
+        is_archived: Soft-delete/archival flag for hiding chats from the active sidebar.
+        is_hidden: Internal flag to hide the chat from normal UI lists.
+        created_at: Automatically populated timestamp of creation.
+        updated_at: Automatically updated timestamp whenever the row is modified.
+
+    Relationships:
+        user: The owner of this chat.
+        messages: A chronologically ordered list of `Message` models in this chat.
+                  Automatically deleted if the Chat is deleted (`cascade="all, delete-orphan"`).
+        uploaded_files: Any files uploaded specifically within the context of this chat.
+    """
 
     __tablename__ = "app_chats"
 
@@ -50,7 +69,19 @@ class Chat(Base):
 
 
 class Message(Base):
-    """A single turn in a chat (user prompt or assistant reply)."""
+    """
+    Represents a single turn (utterance) within a chat.
+
+    Attributes:
+        id: Primary key, auto-incremented integer.
+        chat_id: Foreign key linking to the parent `app_chats` row.
+        role: Enum-like string identifying the sender. Usually 'user' or 'assistant'.
+        content: The actual text payload of the message (can be markdown).
+        created_at: Timestamp of when the message was sent.
+
+    Relationships:
+        chat: Back-reference to the parent Chat session.
+    """
 
     __tablename__ = "app_messages"
 
@@ -58,7 +89,7 @@ class Message(Base):
     chat_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("app_chats.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    role: Mapped[str] = mapped_column(String(10), nullable=False)  # 'user' | 'assistant'
+    role: Mapped[str] = mapped_column(String(10), nullable=False)  # Expected: 'user' | 'assistant'
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
 

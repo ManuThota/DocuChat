@@ -1,8 +1,10 @@
 """
 backend/models/file.py — UploadedFile ORM model.
 
-Each uploaded file is linked to a user and optionally to a chat.
-The FAISS index path is stored here so the RAG pipeline can load it.
+This module defines the SQLAlchemy 2.0 ORM model for file uploads.
+It manages the metadata for documents uploaded by users, acting as the bridge
+between the raw physical files on disk, the extracted text in the database, 
+and the localized FAISS vector embeddings used in the Retrieval-Augmented Generation (RAG) pipeline.
 """
 
 from __future__ import annotations
@@ -15,15 +17,35 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.database import Base
 
-# TYPE_CHECKING is False at runtime — prevents circular imports.
-# Only active when a static type checker (Pylance, mypy) analyses the file.
+# TYPE_CHECKING is False at runtime. Used to prevent circular imports 
+# while still providing type hinting for SQLAlchemy relationships.
 if TYPE_CHECKING:
     from backend.models.user import User  # noqa: F401
     from backend.models.chat import Chat  # noqa: F401
 
 
 class UploadedFile(Base):
-    """Metadata for a user-uploaded document."""
+    """
+    Represents metadata and system paths for a user-uploaded document.
+
+    Attributes:
+        id: Primary key, auto-incremented integer.
+        user_id: Foreign key linking to the `app_users` table (the document owner).
+        chat_id: Optional foreign key. If null, the file is globally accessible to the user.
+                 If set, the file is strictly scoped to a specific chat session.
+        original_name: The actual filename provided by the user (e.g., "tax_return_2025.pdf").
+        stored_name: An obfuscated UUID-based filename used securely on the filesystem.
+        file_type: Extension or type identifier (e.g., "pdf", "docx", "txt").
+        file_size: The size of the file in bytes.
+        extracted_text: The raw, parsed text content extracted from the document via PyMuPDF/OCR.
+        faiss_index_path: Absolute or relative path to the persistent `.index` file containing 
+                          the HuggingFace vector embeddings for this document.
+        created_at: Timestamp of when the file was uploaded to the system.
+
+    Relationships:
+        user: Back-reference to the owner.
+        chat: Optional back-reference to a specific chat scope.
+    """
 
     __tablename__ = "app_uploaded_files"
 

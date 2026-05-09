@@ -1,16 +1,13 @@
 """
-backend/models/user.py — User, OTPRecord, and UserPreferences ORM models.
+backend/models/user.py — Identity and Preferences ORM models.
 
-Auth flow:
-  SIGNUP:
-    1. User submits name + email + password
-    2. Account created with is_active=False, password stored as bcrypt hash
-    3. OTP sent to email
-    4. User verifies OTP → is_active set to True → JWT returned
+This module manages everything related to user identity, security verification,
+and personal preferences within the system.
 
-  LOGIN:
-    1. User submits email + password
-    2. Password hash verified → JWT returned (no OTP needed)
+Authentication State Machine:
+  1. SIGNUP: User registers -> DB Record Created (`is_active=False`) -> OTP generated/emailed.
+  2. VERIFY: User inputs OTP -> System validates -> `is_active=True` -> JWT issued.
+  3. LOGIN:  User provides Email/Password -> Hash validated -> JWT issued (OTP skipped).
 """
 
 from __future__ import annotations
@@ -23,15 +20,33 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.database import Base
 
-# TYPE_CHECKING is False at runtime — prevents circular imports.
-# Only active when a static type checker (Pylance, mypy) analyses the file.
+# TYPE_CHECKING is False at runtime. Prevents circular imports while 
+# permitting static type checkers to accurately map SQLAlchemy relationships.
 if TYPE_CHECKING:
     from backend.models.chat import Chat          # noqa: F401
     from backend.models.file import UploadedFile  # noqa: F401
 
 
 class User(Base):
-    """Registered user account. Password is stored as a bcrypt hash."""
+    """
+    Represents a registered user identity in the system.
+
+    Attributes:
+        id: Primary key, auto-incremented integer.
+        email: Unique email address used for login and verification.
+        name: User's display name.
+        gender: Optional demographic string ('male', 'female', 'other').
+        profession: Optional string to personalize prompt instructions.
+        password_hash: Irreversible bcrypt hash of the user's password.
+        is_active: Boolean flag governing login capability. 
+                   Set to False upon creation, True only after OTP verification.
+        created_at: Timestamp of account registration.
+
+    Relationships:
+        chats: A list of all conversation threads owned by this user.
+        uploaded_files: A list of all files uploaded by this user.
+        preferences: A 1-to-1 relationship containing UI/UX configurations.
+    """
 
     __tablename__ = "app_users"
 
@@ -58,8 +73,12 @@ class User(Base):
 
 class OTPRecord(Base):
     """
-    Short-lived OTP codes used only during signup email verification.
-    Each code expires after 10 minutes and is single-use.
+    Represents a transient verification code (One Time Password).
+    
+    Security mechanics:
+    - OTPs are scoped strictly to an email address.
+    - An OTP is strictly single-use (`is_used` toggles to True upon successful verification).
+    - Hard expiry enforcement (`expires_at`) prevents replay or brute-force attacks.
     """
 
     __tablename__ = "app_otp_records"
@@ -73,7 +92,13 @@ class OTPRecord(Base):
 
 
 class UserPreferences(Base):
-    """Per-user settings: theme, language, summary style."""
+    """
+    Represents a 1-to-1 extension of the User table for application settings.
+
+    These values are highly decoupled from security logic, allowing the UI 
+    to fetch and mutate them continuously without risking state corruption 
+    in the primary User identity table.
+    """
 
     __tablename__ = "app_user_preferences"
 
