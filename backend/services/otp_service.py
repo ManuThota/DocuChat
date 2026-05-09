@@ -155,5 +155,6 @@ async def _send_otp_email(to_email: str, otp_code: str, context: str) -> None:
         port=settings.email_port,
         username=settings.email_user,
         password=settings.email_pass,
-        start_tls=True,
+        use_tls=(settings.email_port == 465),
+        start_tls=(settings.email_port == 587),
     )

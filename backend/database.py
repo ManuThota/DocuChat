@@ -14,6 +14,10 @@ from backend.config import get_settings
 settings = get_settings()
 
 # ─── Engine ──────────────────────────────────────────────────────────────────
+connect_args = {}
+if settings.database_url.startswith("postgresql+asyncpg"):
+    connect_args["prepared_statement_cache_size"] = 0
+
 engine = create_async_engine(
     settings.database_url,
     echo=False,
@@ -25,6 +29,7 @@ engine = create_async_engine(
     pool_recycle=1800,
     # validates dead connections
     pool_pre_ping=True,
+    connect_args=connect_args,
 )
 
 # ─── Session factory ─────────────────────────────────────────────────────────
