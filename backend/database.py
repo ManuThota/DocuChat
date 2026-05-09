@@ -13,26 +13,24 @@ from backend.config import get_settings
 
 settings = get_settings()
 
-import uuid
-
 # ─── Engine ──────────────────────────────────────────────────────────────────
-connect_args = {}
+engine_kwargs = {
+    "echo": False,
+    "future": True,
+    "pool_size": 20,
+    "max_overflow": 30,
+    "pool_timeout": 30,
+    "pool_recycle": 1800,
+    "pool_pre_ping": True,
+}
+
+# SQLAlchemy asyncpg dialect requires prepared_statement_cache_size=0 for PgBouncer
 if settings.database_url.startswith("postgresql+asyncpg"):
-    connect_args["statement_cache_size"] = 0
-    connect_args["prepared_statement_name_func"] = lambda: f"__asyncpg_{uuid.uuid4().hex}__"
+    engine_kwargs["prepared_statement_cache_size"] = 0
 
 engine = create_async_engine(
     settings.database_url,
-    echo=False,
-    future=True,
-    # connection pooling
-    pool_size=20,
-    max_overflow=30,
-    pool_timeout=30,
-    pool_recycle=1800,
-    # validates dead connections
-    pool_pre_ping=True,
-    connect_args=connect_args,
+    **engine_kwargs
 )
 
 # ─── Session factory ─────────────────────────────────────────────────────────
