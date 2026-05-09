@@ -28,10 +28,6 @@ async function apiFetch(path, options = {}) {
   if (res.status === 204) return null;
 
   if (!res.ok) {
-    if (res.status === 401) {
-      Auth.logout(); // Redirect to login on unauthorized
-      return;
-    }
     let message = `HTTP ${res.status}`;
     try {
       const err = await res.json();
@@ -41,6 +37,15 @@ async function apiFetch(path, options = {}) {
         message = err.detail || JSON.stringify(err);
       }
     } catch (_) { /* ignore JSON parse errors */ }
+
+    if (res.status === 401) {
+      // Auto-logout only if not already on the login/index page
+      if (!window.location.pathname.endsWith('index.html') && window.location.pathname !== '/') {
+        Auth.logout(); 
+      }
+      throw new Error(message || 'Unauthorized');
+    }
+
     throw new Error(message);
   }
 
