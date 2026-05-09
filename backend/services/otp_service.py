@@ -6,8 +6,8 @@ This module manages the lifecycle of One-Time Passwords used for identity verifi
 Key Responsibilities:
 1. Generation: Creates cryptographically secure 6-digit numeric codes.
 2. Persistence: Stores codes in the `OTPRecord` table with strict 10-minute expiry windows.
-3. Delivery: Dispatches emails via the Resend HTTP API (HTTPS port 443) — works on all
-   cloud providers including free-tier Render (which blocks outbound SMTP ports 465/587).
+3. Delivery: Dispatches emails via the Brevo Transactional Email API (HTTPS port 443).
+   Works on all cloud providers including free-tier Render (which blocks SMTP ports 465/587).
 4. Validation: Verifies codes, ensuring single-use consumption by deleting them after use.
 """
 
@@ -27,7 +27,8 @@ settings = get_settings()
 
 OTP_EXPIRY_MINUTES = 10
 
-RESEND_API_URL = "https://api.resend.com/emails"
+# Brevo Transactional Email API endpoint
+BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
 
 
 def _generate_otp(length: int = 6) -> str:
@@ -56,7 +57,7 @@ async def generate_and_store_otp(email: str, db: AsyncSession, context: str = "s
         )
     )
 
-    otp_code  = _generate_otp()
+    otp_code   = _generate_otp()
     expires_at = now + timedelta(minutes=OTP_EXPIRY_MINUTES)
 
     record = OTPRecord(
@@ -68,7 +69,7 @@ async def generate_and_store_otp(email: str, db: AsyncSession, context: str = "s
     db.add(record)
     await db.commit()
 
-    # Deliver email — non-blocking best-effort; SMTP errors must NOT crash the request
+    # Deliver email — non-blocking best-effort; errors must NOT crash the request
     try:
         await _send_otp_email(email, otp_code, context)
     except Exception as exc:
@@ -111,10 +112,13 @@ async def verify_otp(email: str, code: str, db: AsyncSession) -> bool:
 
 async def _send_otp_email(to_email: str, otp_code: str, context: str) -> None:
     """
-    Send the OTP code using the Resend HTTP API.
+    Send the OTP code using the Brevo Transactional Email API.
 
-    Resend communicates over standard HTTPS (port 443), which is never blocked
+    Brevo communicates over standard HTTPS (port 443), which is never blocked
     by cloud providers — unlike SMTP ports 465/587 which Render blocks on free tier.
+    
+    Brevo free tier: 300 emails/day, no credit card required.
+    API docs: https://developers.brevo.com/reference/sendtransacemail
     """
     if context == "reset":
         subject = "Your DocuChat Password Reset Code"
@@ -128,7 +132,7 @@ async def _send_otp_email(to_email: str, otp_code: str, context: str) -> None:
     plain_body = (
         f"{title}\n\n"
         f"{desc}\n\n"
-        f"Code: {otp_code}\n\n"
+        f"Your code: {otp_code}\n\n"
         f"If you didn't request this, you can safely ignore this email."
     )
 
@@ -148,25 +152,38 @@ async def _send_otp_email(to_email: str, otp_code: str, context: str) -> None:
     </div>
     """
 
+    # Parse the "Name <email>" format from settings
+    from_raw = settings.email_from  # e.g. "DocuChat <noreply@yourdomain.com>"
+    if "<" in from_raw and ">" in from_raw:
+        from_name  = from_raw.split("<")[0].strip()
+        from_email = from_raw.split("<")[1].rstrip(">").strip()
+    else:
+        from_name  = "DocuChat"
+        from_email = from_raw.strip()
+
     payload = {
-        "from":    settings.email_from,
-        "to":      [to_email],
-        "subject": subject,
-        "text":    plain_body,
-        "html":    html_body,
+        "sender": {
+            "name":  from_name,
+            "email": from_email,
+        },
+        "to": [{"email": to_email}],
+        "subject":     subject,
+        "textContent": plain_body,
+        "htmlContent": html_body,
     }
 
     headers = {
-        "Authorization": f"Bearer {settings.resend_api_key}",
-        "Content-Type":  "application/json",
+        "api-key":      settings.brevo_api_key,
+        "Content-Type": "application/json",
+        "Accept":       "application/json",
     }
 
     async with httpx.AsyncClient(timeout=15) as client:
-        response = await client.post(RESEND_API_URL, json=payload, headers=headers)
+        response = await client.post(BREVO_API_URL, json=payload, headers=headers)
 
     if response.status_code not in (200, 201):
         raise RuntimeError(
-            f"Resend API error {response.status_code}: {response.text}"
+            f"Brevo API error {response.status_code}: {response.text}"
         )
 
-    print(f"[OTP] Email sent successfully to {to_email} via Resend (id={response.json().get('id')})")
+    print(f"[OTP] Email sent successfully to {to_email} via Brevo (id={response.json().get('messageId')})")
