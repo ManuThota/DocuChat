@@ -29,7 +29,7 @@ export function appendMessage(container, role, content, msgId = null) {
     bubble.innerHTML = `
       <div class="synthesizing-loader">
         <div class="loader-ring"></div>
-        <div class="loader-text">Analysing Document...</div>
+        <div class="loader-text">Analyzing Document...</div>
       </div>
     `;
   } else if (role === 'assistant') {
@@ -85,17 +85,28 @@ function addCopyButtons(element) {
  * @param {HTMLElement} container
  * @returns {HTMLElement} The typing element (call .remove() when done).
  */
-export function showTypingIndicator(container) {
+export function showTypingIndicator(container, mode = 'dots') {
   const wrap = document.createElement('div');
-  wrap.className = 'message assistant typing-indicator';
+  wrap.className = `message assistant typing-indicator ${mode}`;
 
   const bubble = document.createElement('div');
   bubble.className = 'msg-bubble';
-  for (let i = 0; i < 3; i++) {
-    const dot = document.createElement('div');
-    dot.className = 'typing-dot';
-    bubble.appendChild(dot);
+
+  if (mode === 'document') {
+    bubble.innerHTML = `
+      <div class="synthesizing-loader">
+        <div class="loader-ring"></div>
+        <div class="loader-text">Analyzing Document...</div>
+      </div>
+    `;
+  } else {
+    for (let i = 0; i < 3; i++) {
+      const dot = document.createElement('div');
+      dot.className = 'typing-dot';
+      bubble.appendChild(dot);
+    }
   }
+
   wrap.appendChild(bubble);
   container.appendChild(wrap);
 

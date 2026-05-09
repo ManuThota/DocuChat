@@ -788,7 +788,9 @@ async function sendMessage() {
   await sidebar.refresh();
   sidebar.setActive(activeChatId);
 
-  const typingEl = showTypingIndicator(chatInner);
+  // Show context-aware typing indicator
+  const typingMode = fileId ? 'document' : 'dots';
+  const typingEl = showTypingIndicator(chatInner, typingMode);
 
   try {
     if (summaryMode) {
@@ -809,13 +811,12 @@ async function sendMessage() {
       }
     } else {
       // Use streaming API for regular chat with a controlled typing speed
-      if (typingEl) typingEl.remove();
-      const messageEl = appendMessage(chatInner, 'assistant', '', null);
-      const bubble = messageEl.querySelector('.msg-bubble');
-      
+      let messageEl = null;
+      let bubble = null;
       let fullText = "";
       let tokenQueue = [];
       let streamFinished = false;
+      let indicatorRemoved = false;
 
       // Producer: Consume the stream as fast as it comes
       const streamPromise = ChatAPI.sendMessageStream(activeChatId, content, fileId, language, (token) => {
@@ -825,6 +826,14 @@ async function sendMessage() {
       // Consumer: Render tokens at a controlled "writing style" speed
       while (!streamFinished || tokenQueue.length > 0) {
         if (tokenQueue.length > 0) {
+          // Remove indicator and create message bubble ONLY on the first token
+          if (!indicatorRemoved) {
+            if (typingEl) typingEl.remove();
+            messageEl = appendMessage(chatInner, 'assistant', '', null);
+            bubble = messageEl.querySelector('.msg-bubble');
+            indicatorRemoved = true;
+          }
+
           const token = tokenQueue.shift();
           fullText += token;
           bubble.innerHTML = marked.parse(fullText);
@@ -843,6 +852,8 @@ async function sendMessage() {
         }
       }
       
+      // Cleanup typing indicator if stream failed before any tokens
+      if (!indicatorRemoved && typingEl) typingEl.remove();
     }
 
     // After completion, update UI state (Fast-Poll for backend title)
