@@ -1,13 +1,15 @@
 """
-backend/services/document_parser.py — Extract plain text from uploaded documents.
+backend/services/document_parser.py — Multi-format Document Text Extractor.
 
-Supported formats:
-  - PDF  → PyMuPDF (fitz)  — fast, no poppler dependency
-  - DOCX → python-docx
-  - TXT  → UTF-8 decode with fallback to latin-1
-  - PNG/JPG → pytesseract OCR (requires Tesseract binary installed)
+This service abstracts away the complexities of reading various file formats.
+It exposes a unified `extract_text` function that routes the raw byte stream to the 
+appropriate parser based on the file extension.
 
-All functions return a plain string. Whitespace is normalised.
+Supported Formats & Engines:
+  - PDF: PyMuPDF (fitz) — Extremely fast, robust C-binding, no external Poppler dependency.
+  - DOCX: python-docx — Native XML traversal for Word documents.
+  - TXT: Built-in Python decoders (UTF-8 with Latin-1 fallback).
+  - Images (PNG/JPG): pytesseract — Optical Character Recognition (requires Tesseract binary).
 """
 
 import io
@@ -43,6 +45,7 @@ def extract_text(file_bytes: bytes, file_ext: str) -> str:
 def _extract_pdf(data: bytes) -> str:
     """Extract text from PDF using PyMuPDF (fitz)."""
     try:
+        # pyrefly: ignore [missing-import]
         import fitz  # PyMuPDF
 
         doc = fitz.open(stream=data, filetype="pdf")

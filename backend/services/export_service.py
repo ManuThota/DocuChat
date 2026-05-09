@@ -1,3 +1,11 @@
+"""
+backend/services/export_service.py — PDF Generation Engine.
+
+This module handles the transformation of Markdown-formatted chat history into a styled,
+printable PDF document using the `reportlab` library. It parses the Markdown into HTML, 
+cleans it with BeautifulSoup, and then maps HTML tags to ReportLab Flowable objects 
+to maintain formatting (bold, italic, code blocks) in the final PDF.
+"""
 import re
 import html
 import markdown2

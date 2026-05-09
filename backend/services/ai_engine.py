@@ -1,22 +1,31 @@
 """
-backend/services/ai_engine.py — AI inference wrappers.
+backend/services/ai_engine.py — Core AI Inference & Provider Routing.
 
-Architecture (three-model routing by task):
+Architecture (Three-Model Routing by Task):
   ┌──────────────────────────────────────────────────────────────────────────┐
-  │ Task                    │ Provider  │ Model                              │
-  │─────────────────────────│───────────│────────────────────────────────────│
-  │ Q&A / Chat              │ Groq API  │ llama-3.1-8b-instant   (6k TPM)   │
-  │ Map phase (per-chunk)   │ Groq API  │ llama-3.1-8b-instant   (6k TPM)   │
-  │ Summary synthesis       │ Groq API  │ llama-3.3-70b-versatile (6k TPM)  │
+  │ Task                    │ Provider   │ Model                             │
+  ├─────────────────────────┼────────────┼───────────────────────────────────┤
+  │ Q&A / Chat              │ Groq API   │ llama-3.1-8b-instant   (6k TPM)   │
+  │ Map phase (per-chunk)   │ Groq API   │ llama-3.1-8b-instant   (6k TPM)   │
+  │ Summary synthesis       │ Groq API   │ llama-3.3-70b-versatile (6k TPM)  │
   │ Map-phase fallback      │ HuggingFace│ facebook/bart-large-cnn           │
   │ Embeddings (RAG)        │ HuggingFace│ sentence-transformers/            │
-  │                         │ Inference │   all-MiniLM-L6-v2                │
+  │                         │ Inference  │   all-MiniLM-L6-v2                │
   └──────────────────────────────────────────────────────────────────────────┘
 
-Summarization Pipeline (paragraph-aware Map-Reduce):
-  1. MAP   — Split document on paragraph boundaries (\\n\\n) into ~4000-char
-             chunks. Each chunk is sent to llama-3.1-8b-instant to extract
-             headings + 1-sentence descriptions. HF BART is the silent
+Summarization Pipeline (Paragraph-aware Map-Reduce):
+  1. MAP: Split document on paragraph boundaries into ~4000-char chunks. 
+          Each chunk is sent to llama-3.1 to extract headings and short descriptions. 
+          HF BART acts as a silent fallback for rate-limiting.
+  2. REDUCE: All mini-summaries are joined and sent to llama-3.3-70b-versatile
+             for final synthesis matching the requested tone/format.
+
+Q&A Pipeline:
+  - Top relevant FAISS chunks are retrieved as context (≤5000 chars).
+  - llama-3.1-8b-instant answers, grounded strictly in the document context.
+  - If no document is provided, the model answers from its general training data.
+
+API keys (free tiers):nt
              fallback if Groq is busy.
   2. REDUCE — All mini-summaries are joined and sent to llama-3.3-70b-versatile
               for final synthesis in the requested mode (short / detailed /
@@ -35,6 +44,8 @@ API keys (free tiers):
 from __future__ import annotations
 
 import time
+
+# pyrefly: ignore [missing-import]
 from groq import Groq
 from huggingface_hub import InferenceClient
 

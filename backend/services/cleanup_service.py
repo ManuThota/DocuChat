@@ -1,5 +1,10 @@
 """
-backend/services/cleanup_service.py — Background task for automatic document deletion.
+backend/services/cleanup_service.py — Background Document Retention Manager.
+
+This module provides an asynchronous daemon (`auto_delete_old_documents`) that runs continuously
+in the background. It periodically scans the `UserPreferences` table for users who have opted into
+the "Auto-Delete Documents" feature and permanently erases any files (both physical disk files
+and FAISS indices) older than 24 hours.
 """
 
 import os

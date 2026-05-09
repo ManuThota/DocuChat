@@ -1,15 +1,13 @@
 """
-backend/services/otp_service.py — OTP generation and email delivery.
+backend/services/otp_service.py — Secure OTP Generation and Email Delivery.
 
-Flow:
-  1. generate_and_store_otp(email, db) — creates a 6-digit code, persists it,
-     and sends it via SMTP.
-  2. verify_otp(email, code, db) — checks the code, marks it used, returns bool.
+This module manages the lifecycle of One-Time Passwords used for identity verification.
 
-Security:
-  - OTP codes expire after 10 minutes (configurable).
-  - Each code is single-use (is_used flag).
-  - Old unused codes for the same email are invalidated on new request.
+Key Responsibilities:
+1. Generation: Creates cryptographically secure 6-digit numeric codes.
+2. Persistence: Stores codes in the `OTPRecord` table with strict 10-minute expiry windows.
+3. Delivery: Dispatches emails securely via `aiosmtplib` using implicit TLS (port 465).
+4. Validation: Verifies codes, ensuring single-use consumption by marking them as `is_used = True`.
 """
 
 import random

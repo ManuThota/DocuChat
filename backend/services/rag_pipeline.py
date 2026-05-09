@@ -1,22 +1,22 @@
 """
-backend/services/rag_pipeline.py — Retrieval-Augmented Generation (RAG) pipeline.
+backend/services/rag_pipeline.py — Retrieval-Augmented Generation (RAG) Engine.
 
-How RAG works:
-  1. INDEXING (upload time):
-     - Document text is split into chunks
-     - Each chunk is embedded via the HuggingFace Inference API
-       (sentence-transformers/all-MiniLM-L6-v2, 384-dim vectors)
-     - Vectors are stored in a local FAISS index (fast, no external DB needed)
+This module orchestrates the vectorization and similarity search phases of DocuChat.
 
-  2. RETRIEVAL (query time):
-     - User question is embedded with the same model via API
-     - FAISS finds the top-k most similar chunks (cosine similarity)
-     - Those chunks form the "context" passed to the LLM
+How RAG Works in DocuChat:
+  1. INDEXING (Upload Time):
+     - The document text is split into semantic chunks.
+     - Each chunk is embedded using the HuggingFace Inference API
+       (model: sentence-transformers/all-MiniLM-L6-v2, yielding 384-dim vectors).
+     - These vectors are persisted locally via a FAISS index (fast, on-device math).
+
+  2. RETRIEVAL (Query Time):
+     - The user's question is embedded using the exact same MiniLM model.
+     - FAISS computes cosine similarity to find the top-k most relevant text chunks.
+     - Those chunks form the strict "context window" passed to the LLM.
 
   3. GENERATION:
-     - Context + question → Flan-T5-large or BART via ai_engine.py
-
-No models are downloaded locally. Only FAISS (index math) runs on-device.
+     - The `ai_engine.py` module uses the context to formulate a grounded answer.
 """
 
 import os
