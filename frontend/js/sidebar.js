@@ -251,39 +251,55 @@ export function initSidebar({ listEl, searchInput, getActiveChatId, showToast, o
     if (e.target === actionOverlay) closeActionModal();
   });
 
-  if (actionConfirm) actionConfirm.addEventListener('click', async () => {
-    if (!pendingAction) return;
-    const { id, type } = pendingAction;
+  if (actionConfirm) {
+    actionConfirm.onclick = async () => {
+      if (!pendingAction) return;
+      const { id, type } = pendingAction;
 
-    try {
-      if (type === 'delete') {
-        // Optimistic UI: Remove from local array and re-render immediately
-        allChats = allChats.filter(c => c.id !== id);
-        render(allChats);
-        onChatDelete(id);
-        showToast('Chat deleted', 'info');
-        closeActionModal();
+      // Close modal immediately for better UX
+      closeActionModal();
 
-        // Bypass backend call if it's a temporary optimistic chat
-        if (typeof id === 'string' && id.startsWith('temp_')) {
-          return;
+      try {
+        if (type === 'delete') {
+          // Optimistic UI: Remove from local array and re-render immediately
+          allChats = allChats.filter(c => c.id !== id);
+          render(allChats);
+          onChatDelete(id);
+          showToast('Chat deleted', 'info');
+
+          // Bypass backend call if it's a temporary optimistic chat
+          if (typeof id === 'string' && id.startsWith('temp_')) {
+            return;
+          }
+
+          await ChatAPI.deleteChat(id);
+          return; 
+        } else if (type === 'archive') {
+          // Optimistic UI
+          const chat = allChats.find(c => c.id === id);
+          if (chat) chat.is_archived = true;
+          render(allChats);
+          
+          showToast('Chat archived', 'success');
+          await ChatAPI.updateChat(id, { is_archived: true });
+        } else if (type === 'hide') {
+          // Optimistic UI
+          const chat = allChats.find(c => c.id === id);
+          if (chat) chat.is_hidden = true;
+          render(allChats);
+          
+          showToast('Chat hidden', 'success');
+          await ChatAPI.updateChat(id, { is_hidden: true });
         }
-
-        await ChatAPI.deleteChat(id);
-        return; 
-      } else if (type === 'archive') {
-        await ChatAPI.updateChat(id, { is_archived: true });
-        showToast('Chat archived', 'success');
-      } else if (type === 'hide') {
-        await ChatAPI.updateChat(id, { is_hidden: true });
-        showToast('Chat hidden', 'success');
+        // Do a background refresh to ensure sync
+        refresh();
+      } catch (err) {
+        showToast(`Failed to ${type} chat.`, 'error');
+        // Revert if failed
+        refresh();
       }
-      await refresh();
-    } catch (err) {
-      showToast(`Failed to ${type} chat.`, 'error');
-    }
-    closeActionModal();
-  });
+    };
+  }
 
   function showFiltered(type) {
     const isArchived = type === 'archived';
@@ -309,18 +325,28 @@ export function initSidebar({ listEl, searchInput, getActiveChatId, showToast, o
       
       // Add restore listeners
       filteredList.querySelectorAll('.restore-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
+        btn.onclick = async (e) => {
           e.stopPropagation();
           const id = parseInt(btn.dataset.id, 10);
+          
+          // Optimistic UI: Close immediately and update local state
+          filteredOverlay.classList.remove('open');
+          const chat = allChats.find(c => c.id === id);
+          if (chat) {
+            chat.is_archived = false;
+            chat.is_hidden = false;
+          }
+          render(allChats);
+          showToast('Chat restored.', 'success');
+
           try {
             await ChatAPI.updateChat(id, { is_archived: false, is_hidden: false });
-            showToast('Chat restored.', 'success');
-            await refresh();
-            showFiltered(type); // Refresh modal content
+            refresh();
           } catch (err) {
             showToast('Failed to restore chat.', 'error');
+            refresh();
           }
-        });
+        };
       });
     }
     filteredOverlay.classList.add('open');
