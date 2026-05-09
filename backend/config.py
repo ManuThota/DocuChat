@@ -24,12 +24,11 @@ class Settings(BaseSettings):
     # ─── Database ─────────────────────────────────────────────────────────────
     database_url: str = "sqlite+aiosqlite:///./docuchat.db"
 
-    # ─── Email (SMTP) ─────────────────────────────────────────────────────────
-    email_host: str = "smtp.gmail.com"
-    email_port: int = 587
-    email_user: str = ""
-    email_pass: str = ""
-    email_from: str = "DocuChat <noreply@docuchat.app>"
+    # ─── Email (Resend HTTP API) ──────────────────────────────────────────────
+    # SMTP is blocked on most free cloud tiers; Resend uses HTTPS (port 443).
+    # Get a free key at: https://resend.com (3,000 emails/month free)
+    resend_api_key: str = ""
+    email_from: str = "DocuChat <onboarding@resend.dev>"
 
     # ─── HuggingFace Inference API ──────────────────────────────────────────────
     # Used for: embeddings (all-MiniLM-L6-v2) + summarization (BART)
