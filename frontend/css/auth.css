@@ -1,5 +1,8 @@
 /*
- * frontend/css/auth.css — Auth pages: login, signup, OTP verify
+ * frontend/css/auth.css — Authentication UI Styles
+ * 
+ * Defines the layout, glassmorphism card components, and micro-animations 
+ * for the Login, Signup, and OTP Verification flows.
  */
 
 .auth-page {

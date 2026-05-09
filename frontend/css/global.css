@@ -1,7 +1,11 @@
 /*
- * frontend/css/global.css
- * Shared design system: CSS variables, resets, typography, and utility classes.
- * Imported by every page.
+ * frontend/css/global.css — Core Design System & Tokens
+ * 
+ * Imported globally by all HTML pages. Defines:
+ *   - CSS Custom Properties (Variables) for colors, spacing, and shadows.
+ *   - Light/Dark theme color palettes.
+ *   - Global resets and base typography (Inter font).
+ *   - Shared UI components (Buttons, Inputs, Toast notifications).
  */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');

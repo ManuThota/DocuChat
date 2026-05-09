@@ -1,5 +1,11 @@
 /*
- * frontend/css/dashboard.css — Main chat dashboard layout and components.
+ * frontend/css/dashboard.css — Main Application Interface
+ * 
+ * Comprehensive stylesheet for the DocuChat dashboard. Handles:
+ *   - The dual-pane responsive layout (Sidebar & Main Chat Area).
+ *   - Sidebar navigation (History, Document uploads, Profile).
+ *   - Chat message bubbles, typing indicators, and markdown rendering.
+ *   - Modals and settings overlays.
  */
 
 /* ─── Layout ─────────────────────────────────────────────────────────────── */
