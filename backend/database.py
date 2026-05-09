@@ -13,10 +13,13 @@ from backend.config import get_settings
 
 settings = get_settings()
 
+import uuid
+
 # ─── Engine ──────────────────────────────────────────────────────────────────
 connect_args = {}
 if settings.database_url.startswith("postgresql+asyncpg"):
-    connect_args["prepared_statement_cache_size"] = 0
+    connect_args["statement_cache_size"] = 0
+    connect_args["prepared_statement_name_func"] = lambda: f"__asyncpg_{uuid.uuid4().hex}__"
 
 engine = create_async_engine(
     settings.database_url,
