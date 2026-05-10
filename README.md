@@ -55,62 +55,62 @@ It is designed to be **lightweight and fast** by leveraging Serverless Inference
 docuchat/
 ├── frontend/
 │   ├── pages/
-│   │   ├── index.html          # Landing / Login page
-│   │   ├── signup.html         # Signup page
-│   │   ├── verify.html         # OTP verification
-│   │   ├── dashboard.html      # Main chat dashboard
-│   │   ├── forgot_password.html# Password recovery start
-│   │   └── reset_password.html # New password entry
+│   │   ├── index.html           # Landing / Login page
+│   │   ├── signup.html          # Signup page
+│   │   ├── verify.html          # OTP verification
+│   │   ├── dashboard.html       # Main chat dashboard
+│   │   ├── forgot_password.html # Password recovery start
+│   │   └── reset_password.html  # New password entry
 │   ├── css/
-│   │   ├── global.css          # Shared design system & CSS variables
-│   │   ├── auth.css            # Auth pages styles
-│   │   └── dashboard.css       # Dashboard layout & components
+│   │   ├── global.css           # Shared design system & CSS variables
+│   │   ├── auth.css             # Auth pages styles
+│   │   └── dashboard.css        # Dashboard layout & components
 │   └── js/
-│       ├── api.js              # Centralised API calls + JWT injection
-│       ├── auth.js             # Auth flow logic (login/signup/verify)
-│       ├── dashboard.js        # Dashboard state & orchestration
-│       ├── upload.js           # File upload & grid controller
-│       ├── sidebar.js          # Chat history & navigation
-│       └── export.js           # PDF export trigger
+│       ├── api.js               # Centralised API calls + JWT injection
+│       ├── auth.js              # Auth flow logic (login/signup/verify)
+│       ├── dashboard.js         # Dashboard state & orchestration
+│       ├── upload.js            # File upload & grid controller
+│       ├── sidebar.js           # Chat history & navigation
+│       └── export.js            # PDF export trigger
 │
 ├── backend/
-│   ├── main.py                 # FastAPI entry point
-│   ├── config.py               # Settings & env vars (pydantic-settings)
-│   ├── database.py             # Async SQLAlchemy engine & session
+│   ├── main.py                  # FastAPI entry point
+│   ├── config.py                # Settings & env vars (pydantic-settings)
+│   ├── database.py              # Async SQLAlchemy engine & session
 │   ├── models/
-│   │   ├── user.py             # User, OTP, Preferences ORM
-│   │   ├── chat.py             # Chat & Message ORM
-│   │   └── file.py             # UploadedFile ORM
+│   │   ├── user.py              # User, OTP, Preferences ORM
+│   │   ├── chat.py              # Chat & Message ORM
+│   │   └── file.py              # UploadedFile ORM
 │   ├── routers/
-│   │   ├── auth.py             # /auth/* endpoints
-│   │   ├── chat.py             # /chat/* endpoints
-│   │   ├── upload.py           # /upload/* endpoints
-│   │   ├── export.py           # /export/* endpoints
-│   │   └── user.py             # /user/* endpoints
+│   │   ├── auth.py              # /auth/* endpoints
+│   │   ├── chat.py              # /chat/* endpoints
+│   │   ├── upload.py            # /upload/* endpoints
+│   │   ├── export.py            # /export/* endpoints
+│   │   └── user.py              # /user/* endpoints
 │   ├── services/
-│   │   ├── ai_engine.py        # Groq/HF Inference wrappers
-│   │   ├── rag_pipeline.py     # RAG: Embed + FAISS + Generate
-│   │   ├── document_parser.py  # PDF/DOCX/TXT/Image extraction
-│   │   ├── otp_service.py      # OTP generation & SMTP email
-│   │   └── export_service.py   # ReportLab PDF export
+│   │   ├── ai_engine.py         # Groq/HF Inference wrappers
+│   │   ├── rag_pipeline.py      # RAG: Embed + FAISS + Generate
+│   │   ├── document_parser.py   # PDF/DOCX/TXT/Image extraction
+│   │   ├── otp_service.py       # OTP generation & SMTP email
+│   │   └── export_service.py    # ReportLab PDF export
 │   ├── utils/
-│   │   ├── security.py         # JWT & Password hashing
-│   │   ├── file_validator.py   # Type & size validation
-│   │   └── chunker.py          # Text splitting for vectorization
+│   │   ├── security.py          # JWT & Password hashing
+│   │   ├── file_validator.py    # Type & size validation
+│   │   └── chunker.py           # Text splitting for vectorization
 │   └── core/
-│       └── dependencies.py     # get_current_user() auth dependency
+│       └── dependencies.py      # get_current_user() auth dependency
 │
-├── uploads/                    # Stored user files + FAISS indexes
-├── .env                        # Local secrets (not committed)
-├── .env.example                # Environment variable template
-├── .python-version             # Python version specification
-├── .gitignore                  # Ignore local files   
-├── ARCHITECTURE.md             # System design & RAG pipeline docs 
-├── README.md                   # This file
-├── requirements.txt            # Python dependencies
-├── Dockerfile                  # Container definition
-├── docker-compose.yml          # Multi-container orchestration
-└── nginx.conf                  # Production reverse proxy config
+├── uploads/                     # Stored user files + FAISS indexes
+├── .env                         # Local secrets (not committed)
+├── .env.example                 # Environment variable template
+├── .python-version              # Python version specification
+├── .gitignore                   # Ignore local files   
+├── ARCHITECTURE.md              # System design & RAG pipeline docs 
+├── README.md                    # This file
+├── requirements.txt             # Python dependencies
+├── Dockerfile                   # Container definition
+├── docker-compose.yml           # Multi-container orchestration
+└── nginx.conf                   # Production reverse proxy config
 ```
 
 ---
@@ -146,10 +146,10 @@ HF_API_KEY=your_huggingface_key
 # Database
 DATABASE_URL=postgresql+asyncpg://user:pass@host:port/dbname
 
-# Email (for OTP)
-EMAIL_HOST=smtp.gmail.com
-EMAIL_USER=your@email.com
-EMAIL_PASS=your_app_password
+# Sign up at: https://app.brevo.com → Settings → API Keys → Create (300 emails/day free)
+BREVO_API_KEY=your-brevo-api-key-here
+# Must match a sender address verified in your Brevo account:
+EMAIL_FROM=DocuChat <your-verified@email.com>
 ```
 
 ### 4. Run Locally
