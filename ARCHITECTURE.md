@@ -6,6 +6,10 @@ DocuChat is a high-performance RAG (Retrieval-Augmented Generation) platform des
 
 The system is built on a **Service-Oriented Architecture (SOA)** using FastAPI, ensuring asynchronous non-blocking operations for all file parsing and AI inference tasks.
 
+**Live Demo:** [https://docuchat-jy9z.onrender.com](https://docuchat-jy9z.onrender.com)
+
+**GitHub:** [https://github.com/ManuThota/DocuChat](https://github.com/ManuThota/DocuChat)
+
 ---
 
 ## Architecture Diagram

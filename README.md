@@ -3,7 +3,9 @@
 > **Upload. Chat. Summarize. Export.**  
 > A professional, full-stack RAG (Retrieval-Augmented Generation) platform built with a high-performance FastAPI backend and a sleek, modern Vanilla JS dashboard.
 
-**🌐 Live Demo:** [https://docuchat-jy9z.onrender.com](https://docuchat-jy9z.onrender.com)
+**Live Demo:** [https://docuchat-jy9z.onrender.com](https://docuchat-jy9z.onrender.com)
+
+**GitHub:** [https://github.com/ManuThota/DocuChat](https://github.com/ManuThota/DocuChat)
 
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110-009688)](https://fastapi.tiangolo.com/)
@@ -13,7 +15,7 @@
 
 ---
 
-## 🚀 Overview
+## Overview
 
 DocuChat is a production-ready document interaction platform that allows users to "talk" to their data. Unlike standard chatbots, DocuChat uses **Retrieval-Augmented Generation (RAG)** to ground AI responses in the specific context of your uploaded files, ensuring high accuracy and reducing hallucinations.
 
@@ -21,7 +23,7 @@ It is designed to be **lightweight and fast** by leveraging Serverless Inference
 
 ---
 
-## ✨ Key Features
+## Key Features
 
 - **Multi-Format Support**: Seamlessly parse **PDF, DOCX, TXT**, and even **Images (PNG/JPG)** via Tesseract OCR.
 - **Ultra-Fast Chat**: Powered by **Groq (Llama 3.1)** for near-instant response times.
@@ -34,7 +36,7 @@ It is designed to be **lightweight and fast** by leveraging Serverless Inference
 
 ---
 
-## 🧠 Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
@@ -49,7 +51,7 @@ It is designed to be **lightweight and fast** by leveraging Serverless Inference
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 ```text
 docuchat/
@@ -115,7 +117,7 @@ docuchat/
 
 ---
 
-## 🛠️ Installation & Setup
+## Installation & Setup
 
 ### 1. Prerequisites
 - Python 3.10 or higher
@@ -160,7 +162,7 @@ Visit `http://localhost:8000` in your browser.
 
 ---
 
-## 🚀 Deployment
+## Deployment
 
 The application is designed to be easily deployed to platforms like **Railway, Render, or AWS**.
 
@@ -171,12 +173,12 @@ gunicorn backend.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$
 
 ---
 
-## 📝 License
+## License
 
 Distributed under the MIT License. See `LICENSE` for more information.
 
 ---
 
-## 🤝 Contact
+## Contact
 
 Developed by **Manu Thota**.
